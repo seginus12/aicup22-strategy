@@ -14,7 +14,7 @@ from debug_interface import DebugInterface
 from debugging.color import Color
 import random
 
-PROB_OF_DIRECTION_CHANGE = 0.015
+PROB_OF_DIRECTION_CHANGE = 0.0015
 
 class MyStrategy:
     my_unit_position: Vec2
@@ -30,18 +30,19 @@ class MyStrategy:
         y_projection = point2.y - point1.y
         return pow(pow(x_projection, 2) + pow(y_projection, 2), 0.5)
     
-    def choose_target(self, enemy_position: Vec2):
+    def choose_target(self, enemy_position: Vec2, debug_interface: Optional[DebugInterface]):
         distance_to_enemy = self.calc_distance(self.my_unit_position, enemy_position)
+        debug_interface.add_placed_text(self.my_unit_position, "{}".format(distance_to_enemy), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         if distance_to_enemy < self.distance_to_nearest_enemy:
             self.distance_to_nearest_enemy = distance_to_enemy
             self.target_view_direction.x = enemy_position.x - self.my_unit_position.x
             self.target_view_direction.y = enemy_position.y - self.my_unit_position.y
             if distance_to_enemy > self.constants.weapons[0].projectile_speed:
                 self.target_move_direction.x = self.target_view_direction.x * self.constants.max_unit_forward_speed
-                self.target_move_direction.y = self.target_view_direction.x * self.constants.max_unit_forward_speed
+                self.target_move_direction.y = self.target_view_direction.y * self.constants.max_unit_forward_speed
             else:
                 self.target_move_direction.x = -self.target_view_direction.x * self.constants.max_unit_forward_speed
-                self.target_move_direction.y = -self.target_view_direction.x * self.constants.max_unit_forward_speed
+                self.target_move_direction.y = -self.target_view_direction.y * self.constants.max_unit_forward_speed
 
     def choose_shield_potion(self, loot):
         for loot_instance in loot:
@@ -69,7 +70,9 @@ class MyStrategy:
     def get_out_of_the_zone(self, zone_next_center: Vec2):
         self.target_view_direction.x = zone_next_center.x - self.my_unit_position.x
         self.target_view_direction.y = zone_next_center.y - self.my_unit_position.y
-        self.target_move_direction = self.target_view_direction
+        self.target_move_direction.x = zone_next_center.x - self.my_unit_position.x
+        self.target_move_direction.y = zone_next_center.y - self.my_unit_position.y
+
 
     def __init__(self, constants: Constants):
         x = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
@@ -78,28 +81,35 @@ class MyStrategy:
         self.target_view_direction = Vec2(x, y)
         self.my_unit_position = Vec2(0, 0)
         self.enemy_is_near = False
-        self.aim = False
         self.action = None
         self.distance_to_nearest_enemy = constants.view_distance
         self.distance_to_nearest_shield_potion = constants.view_distance
         self.constants = constants
 
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
+        self.distance_to_nearest_enemy = self.constants.view_distance + 1
         self.enemy_is_near = False
-        self.distance_to_nearest_enemy = self.constants.view_distance
         orders = {}
         for unit in game.units:
+            debug_interface.add_placed_text(unit.position, "{} {}".format(game.my_id, unit.player_id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
             if unit.player_id != game.my_id:
                 self.enemy_is_near = True
                 self.action = ActionOrder.Aim(True)
-                self.choose_target(unit.position)
+                self.choose_target(unit.position, debug_interface)
                 continue
             
             self.my_unit_position = unit.position
             distance_to_current_zone_centre = self.calc_distance(self.my_unit_position, game.zone.current_center)
 
-            if not self.enemy_is_near and unit == game.units[-1]:
-                self.aim = False
+            if unit == game.units[-1] and not self.enemy_is_near:
+                self.action = None
+                print("dfd")
+                if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*2:
+                    self.target_view_direction.x = game.zone.next_center.x - self.my_unit_position.x
+                    self.target_view_direction.y = game.zone.next_center.y - self.my_unit_position.y
+                    self.target_move_direction.x = game.zone.next_center.x - self.my_unit_position.x
+                    self.target_move_direction.y = game.zone.next_center.y - self.my_unit_position.y
+                '''
                 while True:
                     if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*2:
                         self.get_out_of_the_zone(game.zone.next_center)
@@ -108,12 +118,12 @@ class MyStrategy:
                         self.choose_shield_potion(game.loot)
                         break
                     if random.random() < PROB_OF_DIRECTION_CHANGE:
-                        print("meh")
                         self.free_movement()
                         break
+                    break
+                '''
             
             orders[unit.id] = UnitOrder(self.target_move_direction, self.target_view_direction, self.action)
-            debug_interface.add_placed_text(unit.position, "{:.1f}".format(unit.shield_potions), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
