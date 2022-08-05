@@ -20,7 +20,7 @@ weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
 loot = {"Weapon": 0, "Shield": 1, "Ammo": 2}
 
 class MyStrategy:
-    my_unit_position: Vec2
+    my_unit: Unit
     move_direction: Vec2
     view_direction: Vec2
     enemy_is_near: bool
@@ -36,15 +36,19 @@ class MyStrategy:
         return pow(pow(x_projection, 2) + pow(y_projection, 2), 0.5)
 
     def set_view_direction(self, target_point: Vec2):
-        self.view_direction.x = target_point.x - self.my_unit_position.x
-        self.view_direction.y = target_point.y - self.my_unit_position.y
+        self.view_direction.x = target_point.x - self.my_unit.position.x
+        self.view_direction.y = target_point.y - self.my_unit.position.y
 
     def set_move_direction(self, target_point: Vec2, speed: int):
-        self.move_direction.x = (target_point.x - self.my_unit_position.x) * speed
-        self.move_direction.y = (target_point.y - self.my_unit_position.y) * speed
+        self.move_direction.x = (target_point.x - self.my_unit.position.x) * speed
+        self.move_direction.y = (target_point.y - self.my_unit.position.y) * speed
+
+    def predict_enemy_position(self, enemy: Vec2):
+        coef = self.calc_distance(self.my_unit.position, enemy.position) / self.constants.weapons[self.my_unit.weapon].projectile_speed
+        return Vec2(enemy.position.x + enemy.velocity.x * coef, enemy.position.y + enemy.velocity.y * coef)
 
     def choose_enemy(self, game: Game, enemy: Unit):
-        distance_to_enemy = self.calc_distance(self.my_unit_position, enemy.position)
+        distance_to_enemy = self.calc_distance(self.my_unit.position, enemy.position)
         if distance_to_enemy < self.distance_to_nearest_enemy:
             self.target_enemy = enemy
 
@@ -52,28 +56,28 @@ class MyStrategy:
         self.target_shield = loot[0]
         for loot_instance in loot:
             if loot_instance.item.TAG == item_tag:
-                if self.calc_distance(self.my_unit_position, loot_instance.position) < self.calc_distance(self.my_unit_position, self.target_shield.position):
+                if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_shield.position):
                     self.target_shield = loot_instance
     
     def choose_ammo(self, loot: Game.loot, item_tag: int, weapon_type: int):
         self.target_ammo = loot[0]
         for loot_instance in loot:
             if loot_instance.item.TAG == item_tag and loot_instance.item.weapon_type_index == weapon_type:
-                if self.calc_distance(self.my_unit_position, loot_instance.position) < self.calc_distance(self.my_unit_position, self.target_ammo.position):
+                if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_ammo.position):
                     self.target_ammo = loot_instance
     
     def replenish_shileds(self, game: Game):
         self.choose_shield(game.loot, loot["Shield"])
         self.set_move_direction(self.target_shield.position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.target_shield.position)
-        if self.calc_distance(self.my_unit_position, self.target_shield.position) < self.constants.unit_radius:
+        if self.calc_distance(self.my_unit.position, self.target_shield.position) < self.constants.unit_radius:
             self.action = ActionOrder.Pickup(self.target_shield.id)
 
     def replenish_ammo(self, game: Game, weapon_index: int):
         self.choose_ammo(game.loot, loot["Ammo"], weapon_index)
         self.set_move_direction(self.target_ammo.position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.target_ammo.position)
-        if self.calc_distance(self.my_unit_position, self.target_ammo.position) < self.constants.unit_radius:
+        if self.calc_distance(self.my_unit.position, self.target_ammo.position) < self.constants.unit_radius:
             self.action = ActionOrder.Pickup(self.target_ammo.id)
 
     def free_movement(self):
@@ -90,7 +94,7 @@ class MyStrategy:
         y = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
         self.move_direction = Vec2(x ,y)
         self.view_direction = Vec2(x, y)
-        self.my_unit_position = Vec2(0, 0)
+        self.my_unit = None
         self.enemy_is_near = False
         self.target_enemy = None
         self.target_ammo = None
@@ -101,24 +105,27 @@ class MyStrategy:
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
         self.distance_to_nearest_enemy = self.constants.view_distance
         orders = {}
+        self.my_unit = game.units[0]
+        self.target_enemy = game.units[0]
         for unit in game.units:
             if unit.player_id != game.my_id:
                 self.enemy_is_near = True
                 self.choose_enemy(game, unit)
                 if unit == game.units[-1]:
-                    self.set_view_direction(unit.position)
-                if self.calc_distance(unit.position, self.my_unit_position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
-                    self.action = ActionOrder.Aim(True)
-                else:
-                    self.action = ActionOrder.Aim(False)
-                if self.calc_distance(unit.position, self.my_unit_position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
-                    self.set_move_direction(unit.position, self.constants.max_unit_forward_speed)
-                else:
-                    self.set_move_direction(unit.position, -self.constants.max_unit_forward_speed)
+                    predicted_position = self.predict_enemy_position(self.target_enemy)
+                    self.set_view_direction(predicted_position)
+                    if self.calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
+                        self.action = ActionOrder.Aim(True)
+                    else:
+                        self.action = ActionOrder.Aim(False)
+                    if self.calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
+                        self.set_move_direction(self.target_enemy.position, self.constants.max_unit_forward_speed)
+                    else:
+                        self.set_move_direction(self.target_enemy.position, -self.constants.max_unit_forward_speed)
                 continue
             
-            self.my_unit_position = unit.position
-            distance_to_current_zone_centre = self.calc_distance(self.my_unit_position, game.zone.current_center)
+            self.my_unit = unit
+            distance_to_current_zone_centre = self.calc_distance(self.my_unit.position, game.zone.current_center)
 
             if unit == game.units[-1]:
                 self.action = None
@@ -137,9 +144,7 @@ class MyStrategy:
                         self.replenish_ammo(game, unit.weapon)
                         break
                     if random.random() < PROB_OF_DIRECTION_CHANGE:
-                        # self.free_movement()
-                        self.set_move_direction(Vec2(0, 0), self.constants.max_unit_forward_speed)
-                        self.set_view_direction(Vec2(0, 0))
+                        self.free_movement()
                         break
                     break     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
