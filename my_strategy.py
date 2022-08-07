@@ -35,6 +35,9 @@ class MyStrategy:
         y_projection = point2.y - point1.y
         return pow(pow(x_projection, 2) + pow(y_projection, 2), 0.5)
 
+    def add_vectors(self, vec1: Vec2, vec2: Vec2):
+        return Vec2(vec1.x + vec2.x, vec1.y + vec2.y) 
+
     def set_view_direction(self, target_point: Vec2):
         self.view_direction.x = target_point.x - self.my_unit.position.x
         self.view_direction.y = target_point.y - self.my_unit.position.y
@@ -66,7 +69,7 @@ class MyStrategy:
                 if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_ammo.position):
                     self.target_ammo = loot_instance
     
-    def replenish_shileds(self, game: Game):
+    def replenish_shields(self, game: Game):
         self.choose_shield(game.loot, loot["Shield"])
         self.set_move_direction(self.target_shield.position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.target_shield.position)
@@ -119,9 +122,12 @@ class MyStrategy:
                     else:
                         self.action = ActionOrder.Aim(False)
                     if self.calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
-                        self.set_move_direction(self.target_enemy.position, self.constants.max_unit_forward_speed)
+                        self.set_move_direction(self.target_enemy.position, 1)
                     else:
-                        self.set_move_direction(self.target_enemy.position, -self.constants.max_unit_forward_speed)
+                        self.set_move_direction(self.target_enemy.position, -1)
+                    if game.zone.current_radius - self.calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
+                        vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
+                        self.set_move_direction(self.add_vectors(self.move_direction, vec_to_zone), 1)
                 continue
             
             self.my_unit = unit
@@ -137,10 +143,10 @@ class MyStrategy:
                     if unit.shield_potions > 0 and unit.shield < self.constants.max_shield:
                         self.action = ActionOrder.UseShieldPotion()
                         break
-                    if unit.shield_potions < self.constants.max_shield_potions_in_inventory:
-                        self.replenish_shileds(game)
+                    if unit.shield_potions < self.constants.max_shield_potions_in_inventory and game.loot:
+                        self.replenish_shields(game)
                         break
-                    if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo:
+                    if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo and game.loot:
                         self.replenish_ammo(game, unit.weapon)
                         break
                     if random.random() < PROB_OF_DIRECTION_CHANGE:
@@ -148,7 +154,7 @@ class MyStrategy:
                         break
                     break     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-            debug_interface.add_placed_text(unit.position, "{:.1f}\n{:.1f}".format(unit.velocity.x, unit.velocity.y), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+            # debug_interface.add_placed_text(unit.position, "{:.1f} {:.1f}\n{:.1f} {:.1f}".format(self.add_vectors(self.vec1, self.vec2).x, self.add_vectors(self.vec1, self.vec2).y, self.move_direction.x, self.move_direction.y), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
