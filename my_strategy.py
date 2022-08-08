@@ -1,9 +1,15 @@
 from argparse import Action
 # from asyncio.windows_events import NULL
 from cmath import sqrt
+from email.errors import ObsoleteHeaderDefect
 from threading import Thread
 import zoneinfo
 from model.game import Game
+<<<<<<< HEAD
+=======
+from model.obstacle import Obstacle
+from model.unit import Unit
+>>>>>>> 87b35ff (Moving to the obstacles instead of free moving when no enemy is near)
 from model.order import Order
 from model.unit_order import UnitOrder
 from model.vec2 import Vec2
@@ -12,6 +18,7 @@ from model.constants import Constants
 from typing import Optional
 from debug_interface import DebugInterface
 from debugging.color import Color
+from typing import List
 import random
 
 PROB_OF_DIRECTION_CHANGE = 0.0015
@@ -25,7 +32,15 @@ class MyStrategy:
     target_move_direction: Vec2
     target_view_direction: Vec2
     enemy_is_near: bool
+<<<<<<< HEAD
     distance_to_nearest_shield_potion: float
+=======
+    target_enemy: Unit
+    target_ammo: Game.loot
+    target_shield: Game.loot
+    target_obstacle: Obstacle
+    passed_obstacles: List[Obstacle]
+>>>>>>> 87b35ff (Moving to the obstacles instead of free moving when no enemy is near)
     action: ActionOrder
     constants: Constants
 
@@ -60,6 +75,7 @@ class MyStrategy:
     def choose_shield_item(self, loot: Game.loot, item_tag: int):
         for loot_instance in loot:
             if loot_instance.item.TAG == item_tag:
+<<<<<<< HEAD
                 distance_to_shield_potion = self.calc_distance(loot_instance.position, self.my_unit_position)
                 if distance_to_shield_potion < self.constants.unit_radius:
                     self.action = ActionOrder.Pickup(loot_instance.id)
@@ -71,6 +87,45 @@ class MyStrategy:
                     self.target_view_direction.y = loot_instance.position.y - self.my_unit_position.y
                     self.target_move_direction.x = self.target_view_direction.x * self.constants.max_unit_forward_speed
                     self.target_move_direction.y = self.target_view_direction.y * self.constants.max_unit_forward_speed
+=======
+                if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_shield.position):
+                    self.target_shield = loot_instance
+    
+    def choose_ammo(self, loot: Game.loot, item_tag: int, weapon_type: int):
+        self.target_ammo = loot[0]
+        for loot_instance in loot:
+            if loot_instance.item.TAG == item_tag and loot_instance.item.weapon_type_index == weapon_type:
+                if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_ammo.position):
+                    self.target_ammo = loot_instance
+    
+    def choose_obstacle(self, initial_position: Vec2):
+        if self.constants.obstacles[0] != self.target_obstacle:
+            closest_obstacle = self.constants.obstacles[0]
+        else:
+            closest_obstacle = self.constants.obstacles[1]
+        dist_to_closest_obstacle = self.calc_distance(closest_obstacle.position, initial_position)
+        for obstacle in self.constants.obstacles:
+            distance_to_obstacle = self.calc_distance(initial_position, obstacle.position)
+            if distance_to_obstacle < dist_to_closest_obstacle and obstacle not in self.passed_obstacles:
+                closest_obstacle = obstacle
+                dist_to_closest_obstacle = distance_to_obstacle
+        self.target_obstacle = closest_obstacle
+        self.passed_obstacles.append(closest_obstacle)
+            
+    def replenish_shields(self, game: Game):
+        self.choose_shield(game.loot, loot["Shield"])
+        self.set_move_direction(self.target_shield.position, self.constants.max_unit_forward_speed)
+        self.set_view_direction(self.target_shield.position)
+        if self.calc_distance(self.my_unit.position, self.target_shield.position) < self.constants.unit_radius:
+            self.action = ActionOrder.Pickup(self.target_shield.id)
+
+    def replenish_ammo(self, game: Game, weapon_index: int):
+        self.choose_ammo(game.loot, loot["Ammo"], weapon_index)
+        self.set_move_direction(self.target_ammo.position, self.constants.max_unit_forward_speed)
+        self.set_view_direction(self.target_ammo.position)
+        if self.calc_distance(self.my_unit.position, self.target_ammo.position) < self.constants.unit_radius:
+            self.action = ActionOrder.Pickup(self.target_ammo.id)
+>>>>>>> 87b35ff (Moving to the obstacles instead of free moving when no enemy is near)
 
     def free_movement(self):
         x = random.uniform(-self.constants.max_unit_forward_speed, self.constants.max_unit_forward_speed)
@@ -92,6 +147,13 @@ class MyStrategy:
         self.target_view_direction = self.target_move_direction
 >>>>>>> 5a7d816 (Does not work)
 
+    def move_to_obstacle(self):
+        distace_to_target_obstacle = self.calc_distance(self.my_unit.position, self.target_obstacle.position)
+        if distace_to_target_obstacle < (self.target_obstacle.radius + self.constants.unit_radius * 2) or distace_to_target_obstacle > self.constants.view_distance:
+            self.choose_obstacle(self.my_unit.position)
+        self.set_move_direction(self.target_obstacle.position, 1)
+        self.set_view_direction(self.target_obstacle.position)
+
     def __init__(self, constants: Constants):
         x = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
         y = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
@@ -99,6 +161,14 @@ class MyStrategy:
         self.target_view_direction = Vec2(x, y)
         self.my_unit_position = Vec2(0, 0)
         self.enemy_is_near = False
+<<<<<<< HEAD
+=======
+        self.target_enemy = None
+        self.target_ammo = None
+        self.target_shield = None
+        self.target_obstacle = constants.obstacles[0]
+        self.passed_obstacles = []
+>>>>>>> 87b35ff (Moving to the obstacles instead of free moving when no enemy is near)
         self.action = None
         self.distance_to_nearest_enemy = constants.view_distance
         self.distance_to_nearest_shield_potion = constants.view_distance
@@ -116,6 +186,7 @@ class MyStrategy:
             debug_interface.add_placed_text(unit.position, "{} {}".format(game.my_id, unit.player_id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
             if unit.player_id != game.my_id:
                 self.enemy_is_near = True
+<<<<<<< HEAD
                 self.action = ActionOrder.Aim(True)
 <<<<<<< HEAD
                 self.choose_target(unit.position, debug_interface)
@@ -123,6 +194,24 @@ class MyStrategy:
                 self.choose_target(unit.position)
                 debug_interface.add_placed_text(self.my_unit_position, "{}\n{}".format(self.my_unit_position, unit.position), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
 >>>>>>> 5a7d816 (Does not work)
+=======
+                self.choose_enemy(game, unit)
+                if unit == game.units[-1]:
+                    predicted_position = self.predict_enemy_position(self.target_enemy)
+                    self.set_view_direction(predicted_position)
+                    if self.calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
+                        self.action = ActionOrder.Aim(True)
+                    else:
+                        self.action = ActionOrder.Aim(False)
+                    if self.calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
+                        self.set_move_direction(self.target_enemy.position, 1)
+                    else:
+                        self.set_move_direction(self.target_enemy.position, -1)
+                    if game.zone.current_radius - self.calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
+                        vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
+                        self.set_move_direction(self.add_vectors(self.move_direction, vec_to_zone), 1)
+                self.passed_obstacles.clear()
+>>>>>>> 87b35ff (Moving to the obstacles instead of free moving when no enemy is near)
                 continue
             
             self.my_unit_position = unit.position
@@ -158,9 +247,12 @@ class MyStrategy:
                     if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo:
                         self.choose_shield_item(game.loot, 2)
                         break
+                    self.move_to_obstacle()
+                    '''
                     if random.random() < PROB_OF_DIRECTION_CHANGE:
                         self.free_movement()
                         break
+<<<<<<< HEAD
 <<<<<<< HEAD
                     break
                 '''
@@ -171,6 +263,12 @@ class MyStrategy:
             orders[unit.id] = UnitOrder(self.target_move_direction, self.target_view_direction, self.action)
             # debug_interface.add_placed_text(unit.position, "{}\n{}".format(self.target_view_direction, unit.aim), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
 >>>>>>> 5a7d816 (Does not work)
+=======
+                    '''
+                    break     
+            orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
+            debug_interface.add_placed_text(unit.position, "{}".format(self.target_obstacle.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+>>>>>>> 87b35ff (Moving to the obstacles instead of free moving when no enemy is near)
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
