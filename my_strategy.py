@@ -1,9 +1,11 @@
 from argparse import Action
 # from asyncio.windows_events import NULL
 from cmath import sqrt
+from email.errors import ObsoleteHeaderDefect
 from threading import Thread
 import zoneinfo
 from model.game import Game
+from model.obstacle import Obstacle
 from model.unit import Unit
 from model.order import Order
 from model.unit_order import UnitOrder
@@ -13,6 +15,7 @@ from model.constants import Constants
 from typing import Optional
 from debug_interface import DebugInterface
 from debugging.color import Color
+from typing import List
 import random
 
 PROB_OF_DIRECTION_CHANGE = 0.007
@@ -27,6 +30,8 @@ class MyStrategy:
     target_enemy: Unit
     target_ammo: Game.loot
     target_shield: Game.loot
+    target_obstacle: Obstacle
+    passed_obstacles: List[Obstacle]
     action: ActionOrder
     constants: Constants
 
@@ -69,6 +74,20 @@ class MyStrategy:
                 if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_ammo.position):
                     self.target_ammo = loot_instance
     
+    def choose_obstacle(self, initial_position: Vec2):
+        if self.constants.obstacles[0] != self.target_obstacle:
+            closest_obstacle = self.constants.obstacles[0]
+        else:
+            closest_obstacle = self.constants.obstacles[1]
+        dist_to_closest_obstacle = self.calc_distance(closest_obstacle.position, initial_position)
+        for obstacle in self.constants.obstacles:
+            distance_to_obstacle = self.calc_distance(initial_position, obstacle.position)
+            if distance_to_obstacle < dist_to_closest_obstacle and obstacle not in self.passed_obstacles:
+                closest_obstacle = obstacle
+                dist_to_closest_obstacle = distance_to_obstacle
+        self.target_obstacle = closest_obstacle
+        self.passed_obstacles.append(closest_obstacle)
+            
     def replenish_shields(self, game: Game):
         self.choose_shield(game.loot, loot["Shield"])
         self.set_move_direction(self.target_shield.position, self.constants.max_unit_forward_speed)
@@ -92,6 +111,13 @@ class MyStrategy:
         self.set_move_direction(zone_next_center, self.constants.max_unit_forward_speed)
         self.set_view_direction(zone_next_center)
 
+    def move_to_obstacle(self):
+        distace_to_target_obstacle = self.calc_distance(self.my_unit.position, self.target_obstacle.position)
+        if distace_to_target_obstacle < (self.target_obstacle.radius + self.constants.unit_radius * 2) or distace_to_target_obstacle > self.constants.view_distance:
+            self.choose_obstacle(self.my_unit.position)
+        self.set_move_direction(self.target_obstacle.position, 1)
+        self.set_view_direction(self.target_obstacle.position)
+
     def __init__(self, constants: Constants):
         x = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
         y = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
@@ -102,6 +128,8 @@ class MyStrategy:
         self.target_enemy = None
         self.target_ammo = None
         self.target_shield = None
+        self.target_obstacle = constants.obstacles[0]
+        self.passed_obstacles = []
         self.action = None
         self.constants = constants
 
@@ -128,6 +156,7 @@ class MyStrategy:
                     if game.zone.current_radius - self.calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
                         vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
                         self.set_move_direction(self.add_vectors(self.move_direction, vec_to_zone), 1)
+                self.passed_obstacles.clear()
                 continue
             
             self.my_unit = unit
@@ -149,12 +178,15 @@ class MyStrategy:
                     if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo and game.loot:
                         self.replenish_ammo(game, unit.weapon)
                         break
+                    self.move_to_obstacle()
+                    '''
                     if random.random() < PROB_OF_DIRECTION_CHANGE:
                         self.free_movement()
                         break
+                    '''
                     break     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-            # debug_interface.add_placed_text(unit.position, "{:.1f} {:.1f}\n{:.1f} {:.1f}".format(self.add_vectors(self.vec1, self.vec2).x, self.add_vectors(self.vec1, self.vec2).y, self.move_direction.x, self.move_direction.y), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+            debug_interface.add_placed_text(unit.position, "{}".format(self.target_obstacle.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
