@@ -74,7 +74,7 @@ class MyStrategy:
                 if self.calc_distance(self.my_unit.position, loot_instance.position) < self.calc_distance(self.my_unit.position, self.target_ammo.position):
                     self.target_ammo = loot_instance
     
-    def choose_obstacle(self, initial_position: Vec2):
+    def get_closest_obstacle(self, initial_position: Vec2):
         if self.constants.obstacles[0] != self.target_obstacle:
             closest_obstacle = self.constants.obstacles[0]
         else:
@@ -85,9 +85,12 @@ class MyStrategy:
             if distance_to_obstacle < dist_to_closest_obstacle and obstacle not in self.passed_obstacles:
                 closest_obstacle = obstacle
                 dist_to_closest_obstacle = distance_to_obstacle
-        self.target_obstacle = closest_obstacle
-        self.passed_obstacles.append(closest_obstacle)
-            
+        return closest_obstacle
+
+    def go_around_an_obstacle(self, obstacle_position: Vec2):
+        
+        pass
+
     def replenish_shields(self, game: Game):
         self.choose_shield(game.loot, loot["Shield"])
         self.set_move_direction(self.target_shield.position, self.constants.max_unit_forward_speed)
@@ -114,7 +117,8 @@ class MyStrategy:
     def move_to_obstacle(self):
         distace_to_target_obstacle = self.calc_distance(self.my_unit.position, self.target_obstacle.position)
         if distace_to_target_obstacle < (self.target_obstacle.radius + self.constants.unit_radius * 2) or distace_to_target_obstacle > self.constants.view_distance:
-            self.choose_obstacle(self.my_unit.position)
+            self.target_obstacle = self.get_closest_obstacle(self.my_unit.position)
+            self.passed_obstacles.append(self.target_obstacle)
         self.set_move_direction(self.target_obstacle.position, 1)
         self.set_view_direction(self.target_obstacle.position)
 
@@ -186,7 +190,7 @@ class MyStrategy:
                     '''
                     break     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-            debug_interface.add_placed_text(unit.position, "{}".format(self.target_obstacle.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+            # debug_interface.add_placed_text(unit.position, "{}".format(self.target_obstacle.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
