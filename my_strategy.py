@@ -1,6 +1,5 @@
 from argparse import Action
-# from asyncio.windows_events import NULL
-import math
+from math import acos, asin, degrees
 from email.errors import ObsoleteHeaderDefect
 from threading import Thread
 import zoneinfo
@@ -18,6 +17,7 @@ from debugging.color import Color
 from typing import List
 import random
 
+EPS = 0.01
 PROB_OF_DIRECTION_CHANGE = 0.007
 weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
 loot = {"Weapon": 0, "Shield": 1, "Ammo": 2}
@@ -42,7 +42,7 @@ class MyStrategy:
 
     def calc_angle(self, vec: Vec2):
         vec_length = self.calc_distance(Vec2(0, 0), vec)
-        arccos = math.degrees(math.acos(vec.x / vec_length))
+        arccos = degrees(acos(vec.x / vec_length))
         sin = vec.y / vec_length
         if sin > 0:
             angle = arccos
@@ -55,9 +55,11 @@ class MyStrategy:
 
     def to_ort(self, vec: Vec2):
         hypotenuse  = self.calc_distance(Vec2(0, 0), vec)
-        sin = vec.y / hypotenuse
-        cos = vec.x / hypotenuse
-        return Vec2(cos, sin)
+        if hypotenuse != 0:
+            sin = vec.y / hypotenuse
+            cos = vec.x / hypotenuse
+            return Vec2(cos, sin)
+        return Vec2(1, 1)
 
     def set_view_direction(self, target_point: Vec2):
         self.view_direction.x = target_point.x - self.my_unit.position.x
@@ -103,31 +105,27 @@ class MyStrategy:
                 dist_to_closest_obstacle = distance_to_obstacle
         return closest_obstacle
 
-    def go_around_an_obstacle(self, obstacle_position, debug_interface: Vec2):
-        taregt_vec = self.to_ort(self.move_direction)
+    def go_around_an_obstacle(self, obstacle_position: Vec2):
+        target_vec = self.to_ort(self.move_direction)
         target_angle = self.calc_angle(self.move_direction)
         obstacle_vec = self.to_ort(Vec2(obstacle_position.x - self.my_unit.position.x, obstacle_position.y - self.my_unit.position.y))
-        obstacle_angle = self.calc_angle(obstacle_vec)
-        condition = False
-        if taregt_vec.x > 0 and taregt_vec.y > 0 and obstacle_vec.x > 0 and obstacle_vec.y < 0:
-            condition = True
-        if taregt_vec.x > 0 and taregt_vec.y < 0 and obstacle_vec.x > 0 and obstacle_vec.y > 0:
-            condition = True
-        if condition:
-            if target_angle < obstacle_angle:
-                correction_vector = Vec2(-obstacle_vec.y, obstacle_vec.x)
+        self.obstacle_angle = self.calc_angle(obstacle_vec)
+        not_is_normal = abs(self.obstacle_angle - self.calc_angle(self.initial_direction))
+        if not_is_normal < 90 or not_is_normal > 270:
+            if abs(self.obstacle_angle - target_angle) < 180:
+                if target_angle < self.obstacle_angle:
+                    correction_vector = Vec2(obstacle_vec.y, -obstacle_vec.x)
+                else:
+                    correction_vector = Vec2(-obstacle_vec.y, obstacle_vec.x)
             else:
-                correction_vector = Vec2(obstacle_vec.y, -obstacle_vec.x)
-        else:
-            if target_angle < obstacle_angle:
-                correction_vector = Vec2(obstacle_vec.y, -obstacle_vec.x)
-            else:
-                correction_vector = Vec2(-obstacle_vec.y, obstacle_vec.x)
-        self.view_direction = self.add_vectors(taregt_vec, correction_vector)
-        self.move_direction = self.add_vectors(taregt_vec, correction_vector)
-        self.move_direction.x *= 10
-        self.move_direction.y *= 10
-        # debug_interface.add_placed_text(self.my_unit.position, "{}\n{}\n{}\n{}\n{}".format(target_angle, obstacle_angle, condition, self.calc_angle(correction_vector), self.calc_angle(self.move_direction)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+                if target_angle < self.obstacle_angle:
+                    correction_vector = Vec2(-obstacle_vec.y, obstacle_vec.x)
+                else:
+                    correction_vector = Vec2(obstacle_vec.y, -obstacle_vec.x)
+            self.view_direction = self.add_vectors(target_vec, correction_vector)
+            self.move_direction = self.add_vectors(target_vec, correction_vector)
+            self.move_direction.x *= 10
+            self.move_direction.y *= 10
         # return correction_vector
 
     def replenish_shields(self, game: Game):
@@ -145,7 +143,7 @@ class MyStrategy:
             self.action = ActionOrder.Pickup(self.target_ammo.id)
 
     def free_movement(self):
-        random_point = Vec2(random.uniform(-1, 1), random.uniform(-1, 1))
+        random_point = Vec2(random.uniform(-10, 10), random.uniform(-10, 10))
         self.set_move_direction(random_point, self.constants.max_unit_forward_speed)
         self.set_view_direction(random_point)
 
@@ -164,7 +162,7 @@ class MyStrategy:
     def __init__(self, constants: Constants):
         x = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
         y = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
-        self.move_direction = Vec2(x ,y)
+        self.move_direction = Vec2(x*10, y*10)
         self.view_direction = Vec2(x, y)
         self.my_unit = None
         self.enemy_is_near = False
@@ -175,6 +173,9 @@ class MyStrategy:
         self.passed_obstacles = []
         self.action = None
         self.constants = constants
+
+        self.initial_direction = Vec2(1, 1)
+        self.obstacle_passed = True
 
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
         self.distance_to_nearest_enemy = self.constants.view_distance
@@ -209,7 +210,20 @@ class MyStrategy:
                 self.action = None
                 self.enemy_is_near = False
                 while True:
-                    '''
+                    closest_obstacle = self.get_closest_obstacle(self.my_unit.position)
+                    dist_to_closest_obstacle = self.calc_distance(self.my_unit.position, closest_obstacle.position)
+                    obstacle_approach_distance = self.constants.unit_radius*2 + closest_obstacle.radius
+                    if dist_to_closest_obstacle < obstacle_approach_distance:
+                        if self.obstacle_passed == True:
+                            self.initial_direction = self.move_direction
+                            self.obstacle_passed = False
+                        self.go_around_an_obstacle(closest_obstacle.position)
+                        break
+                    if self.obstacle_passed == False:
+                        self.obstacle_passed = True
+                        self.move_direction = self.initial_direction
+                        self.view_direction = self.initial_direction
+                        break
                     if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*4:
                         self.move_to_next_zone(game.zone.next_center)
                         break
@@ -222,17 +236,12 @@ class MyStrategy:
                     if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo and game.loot:
                         self.replenish_ammo(game, unit.weapon)
                         break
-                    # self.move_to_obstacle()
-                    '''
                     if random.random() < PROB_OF_DIRECTION_CHANGE:
                         self.free_movement()
                         break
-                    closest_obstacle = self.get_closest_obstacle(self.my_unit.position)
-                    if self.calc_distance(self.my_unit.position, closest_obstacle.position) < self.constants.unit_radius*2 + closest_obstacle.radius:
-                        self.go_around_an_obstacle(closest_obstacle.position, debug_interface)
                     break     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-            # debug_interface.add_placed_text(unit.position, "{}".format(self.my_unit.velocity), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+            debug_interface.add_placed_text(unit.position, "{:.1f}\n{:.1f}".format(self.calc_angle(self.move_direction), self.calc_angle(self.initial_direction)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
