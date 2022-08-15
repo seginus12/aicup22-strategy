@@ -1,5 +1,6 @@
 from argparse import Action
 from email.errors import ObsoleteHeaderDefect
+from ssl import VERIFY_CRL_CHECK_LEAF
 from threading import Thread
 import zoneinfo
 from model.game import Game
@@ -79,28 +80,51 @@ class MyStrategy:
                 dist_to_closest_obstacle = distance_to_obstacle
         return closest_obstacle
 
-    def go_around_an_obstacle(self, obstacle_position: Vec2):
+    def go_around_an_obstacle(self):
+        if self.obstacle_passed == True:
+            self.initial_direction = self.move_direction
+            self.obstacle_passed = False
+        closest_obstacle = self.get_closest_obstacle(self.my_unit.position)
+        self.maneuver(closest_obstacle.position)
+        if self.obstacle_passed == True:
+            self.move_direction = self.initial_direction
+            self.view_direction = self.initial_direction
+
+    def maneuver(self, obstacle_position: Vec2):
         target_vec = to_ort(self.move_direction)
         target_angle = calc_angle(self.move_direction)
         obstacle_vec = to_ort(Vec2(obstacle_position.x - self.my_unit.position.x, obstacle_position.y - self.my_unit.position.y))
-        self.obstacle_angle = calc_angle(obstacle_vec)
-        not_is_normal = abs(self.obstacle_angle - calc_angle(self.initial_direction))
+        obstacle_angle = calc_angle(obstacle_vec)
+        not_is_normal = abs(obstacle_angle - calc_angle(self.initial_direction))
         if not_is_normal < 90 or not_is_normal > 270:
-            if abs(self.obstacle_angle - target_angle) < 180:
-                if target_angle < self.obstacle_angle:
-                    correction_vector = Vec2(obstacle_vec.y, -obstacle_vec.x)
-                else:
-                    correction_vector = Vec2(-obstacle_vec.y, obstacle_vec.x)
-            else:
-                if target_angle < self.obstacle_angle:
-                    correction_vector = Vec2(-obstacle_vec.y, obstacle_vec.x)
-                else:
-                    correction_vector = Vec2(obstacle_vec.y, -obstacle_vec.x)
-            self.view_direction = add_vectors(target_vec, correction_vector)
-            self.move_direction = add_vectors(target_vec, correction_vector)
+            correction_vec = self.get_correction_vector(target_angle, obstacle_angle, obstacle_vec)
+            self.view_direction = add_vectors(target_vec, correction_vec)
+            self.move_direction = add_vectors(target_vec, correction_vec)
             self.move_direction.x *= 10
             self.move_direction.y *= 10
-        # return correction_vector
+        else:
+            self.obstacle_passed = True
+
+    def get_correction_vector(self, target_angle, obstacle_angle, obstacle_vec):
+        if abs(obstacle_angle - target_angle) < 180:
+            if target_angle < obstacle_angle:
+                correction_vec = Vec2(obstacle_vec.y, -obstacle_vec.x)
+            else:
+                correction_vec = Vec2(-obstacle_vec.y, obstacle_vec.x)
+        else:
+            if target_angle < obstacle_angle:
+                correction_vec = Vec2(-obstacle_vec.y, obstacle_vec.x)
+            else:
+                correction_vec = Vec2(obstacle_vec.y, -obstacle_vec.x)
+        return correction_vec
+
+    def obstacle_is_near(self):
+        closest_obstacle = self.get_closest_obstacle(self.my_unit.position)
+        dist_to_closest_obstacle = calc_distance(self.my_unit.position, closest_obstacle.position)
+        obstacle_approach_distance = self.constants.unit_radius*2 + closest_obstacle.radius
+        if dist_to_closest_obstacle < obstacle_approach_distance:
+            return True
+        return False
 
     def replenish_shields(self, game: Game):
         self.choose_shield(game.loot, loot["Shield"])
@@ -184,19 +208,8 @@ class MyStrategy:
                 self.action = None
                 self.enemy_is_near = False
                 while True:
-                    closest_obstacle = self.get_closest_obstacle(self.my_unit.position)
-                    dist_to_closest_obstacle = calc_distance(self.my_unit.position, closest_obstacle.position)
-                    obstacle_approach_distance = self.constants.unit_radius*2 + closest_obstacle.radius
-                    if dist_to_closest_obstacle < obstacle_approach_distance:
-                        if self.obstacle_passed == True:
-                            self.initial_direction = self.move_direction
-                            self.obstacle_passed = False
-                        self.go_around_an_obstacle(closest_obstacle.position)
-                        break
-                    if self.obstacle_passed == False:
-                        self.obstacle_passed = True
-                        self.move_direction = self.initial_direction
-                        self.view_direction = self.initial_direction
+                    if self.obstacle_is_near():
+                        self.go_around_an_obstacle()
                         break
                     if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*4:
                         self.move_to_next_zone(game.zone.next_center)
