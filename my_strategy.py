@@ -157,6 +157,50 @@ class MyStrategy:
         self.set_move_direction(self.target_obstacle.position, 1)
         self.set_view_direction(self.target_obstacle.position)
 
+    def enemy_is_near_actions(self, game, unit):
+        self.enemy_is_near = True
+        self.choose_enemy(game, unit)
+        if unit == game.units[-1]:
+            predicted_position = self.predict_enemy_position(self.target_enemy)
+            self.set_view_direction(predicted_position)
+            if calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
+                self.action = ActionOrder.Aim(True)
+            else:
+                self.action = ActionOrder.Aim(False)
+            if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
+                self.set_move_direction(self.target_enemy.position, 1)
+            else:
+                self.set_move_direction(self.target_enemy.position, -1)
+            if game.zone.current_radius - calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
+                vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
+                self.set_move_direction(add_vectors(self.move_direction, vec_to_zone), 1)
+        self.passed_obstacles.clear()
+
+    def enemy_is_not_near_actions(self, game, unit):
+        distance_to_current_zone_centre = calc_distance(self.my_unit.position, game.zone.current_center)
+        self.action = None
+        self.enemy_is_near = False
+        while True:
+            if self.obstacle_is_near():
+                self.go_around_an_obstacle()
+                break
+            if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*4:
+                self.move_to_next_zone(game.zone.next_center)
+                break
+            if unit.shield_potions > 0 and unit.shield < self.constants.max_shield:
+                self.action = ActionOrder.UseShieldPotion()
+                break
+            if unit.shield_potions < self.constants.max_shield_potions_in_inventory and game.loot:
+                self.replenish_shields(game)
+                break
+            if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo and game.loot:
+                self.replenish_ammo(game, unit.weapon)
+                break
+            if random.random() < PROB_OF_DIRECTION_CHANGE:
+                self.free_movement()
+                break
+            break
+
     def __init__(self, constants: Constants):
         x = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
         y = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
@@ -182,51 +226,11 @@ class MyStrategy:
         self.target_enemy = game.units[0]
         for unit in game.units:
             if unit.player_id != game.my_id:
-                self.enemy_is_near = True
-                self.choose_enemy(game, unit)
-                if unit == game.units[-1]:
-                    predicted_position = self.predict_enemy_position(self.target_enemy)
-                    self.set_view_direction(predicted_position)
-                    if calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
-                        self.action = ActionOrder.Aim(True)
-                    else:
-                        self.action = ActionOrder.Aim(False)
-                    if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
-                        self.set_move_direction(self.target_enemy.position, 1)
-                    else:
-                        self.set_move_direction(self.target_enemy.position, -1)
-                    if game.zone.current_radius - calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
-                        vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
-                        self.set_move_direction(add_vectors(self.move_direction, vec_to_zone), 1)
-                self.passed_obstacles.clear()
+                self.enemy_is_near_actions(game, unit)
                 continue
-            
             self.my_unit = unit
-            distance_to_current_zone_centre = calc_distance(self.my_unit.position, game.zone.current_center)
-
             if unit == game.units[-1]:
-                self.action = None
-                self.enemy_is_near = False
-                while True:
-                    if self.obstacle_is_near():
-                        self.go_around_an_obstacle()
-                        break
-                    if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*4:
-                        self.move_to_next_zone(game.zone.next_center)
-                        break
-                    if unit.shield_potions > 0 and unit.shield < self.constants.max_shield:
-                        self.action = ActionOrder.UseShieldPotion()
-                        break
-                    if unit.shield_potions < self.constants.max_shield_potions_in_inventory and game.loot:
-                        self.replenish_shields(game)
-                        break
-                    if unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo and game.loot:
-                        self.replenish_ammo(game, unit.weapon)
-                        break
-                    if random.random() < PROB_OF_DIRECTION_CHANGE:
-                        self.free_movement()
-                        break
-                    break     
+                self.enemy_is_not_near_actions(game, unit)     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
             # debug_interface.add_placed_text(unit.position, "{:.1f}\n{:.1f}".format(calc_angle(self.move_direction), calc_angle(self.initial_direction)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
