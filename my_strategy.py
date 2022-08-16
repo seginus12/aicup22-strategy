@@ -82,13 +82,16 @@ class MyStrategy:
 
     def go_around_an_obstacle(self):
         if self.obstacle_passed == True:
-            self.initial_direction = self.move_direction
+            self.initial_direction.x = self.move_direction.x
+            self.initial_direction.y = self.move_direction.y
             self.obstacle_passed = False
         closest_obstacle = self.get_closest_obstacle(self.my_unit.position)
         self.maneuver(closest_obstacle.position)
         if self.obstacle_passed == True:
-            self.move_direction = self.initial_direction
-            self.view_direction = self.initial_direction
+            self.move_direction.x = self.initial_direction.x
+            self.move_direction.y = self.initial_direction.y
+            self.view_direction.x = self.initial_direction.x
+            self.view_direction.y = self.initial_direction.y
 
     def maneuver(self, obstacle_position: Vec2):
         target_vec = to_ort(self.move_direction)
@@ -98,10 +101,11 @@ class MyStrategy:
         not_is_normal = abs(obstacle_angle - calc_angle(self.initial_direction))
         if not_is_normal < 90 or not_is_normal > 270:
             correction_vec = self.get_correction_vector(target_angle, obstacle_angle, obstacle_vec)
-            self.view_direction = add_vectors(target_vec, correction_vec)
-            self.move_direction = add_vectors(target_vec, correction_vec)
-            self.move_direction.x *= 10
-            self.move_direction.y *= 10
+            sum_vector = add_vectors(target_vec, correction_vec)
+            self.view_direction.x = sum_vector.x
+            self.view_direction.y = sum_vector.y
+            self.move_direction.x = sum_vector.x * self.constants.max_unit_forward_speed
+            self.move_direction.y = sum_vector.y * self.constants.max_unit_forward_speed
         else:
             self.obstacle_passed = True
 
@@ -232,7 +236,7 @@ class MyStrategy:
             if unit == game.units[-1]:
                 self.enemy_is_not_near_actions(game, unit)     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-            # debug_interface.add_placed_text(unit.position, "{:.1f}\n{:.1f}".format(calc_angle(self.move_direction), calc_angle(self.initial_direction)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+            debug_interface.add_placed_text(unit.position, "{}".format(self.initial_direction), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
