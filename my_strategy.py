@@ -99,8 +99,6 @@ class MyStrategy:
         if self.obstacle_passed == True:
             self.move_direction.x = self.initial_direction.x
             self.move_direction.y = self.initial_direction.y
-            self.view_direction.x = self.initial_direction.x
-            self.view_direction.y = self.initial_direction.y
 
     def maneuver(self, obstacle_position: Vec2):
         target_vec = to_ort(self.move_direction)
@@ -111,8 +109,6 @@ class MyStrategy:
         if not_is_normal < 90 or not_is_normal > 270:
             correction_vec = self.get_correction_vector(target_angle, obstacle_angle, obstacle_vec)
             sum_vector = add_vectors(target_vec, correction_vec)
-            self.view_direction.x = sum_vector.x
-            self.view_direction.y = sum_vector.y
             self.move_direction.x = sum_vector.x * self.constants.max_unit_forward_speed
             self.move_direction.y = sum_vector.y * self.constants.max_unit_forward_speed
         else:
@@ -176,10 +172,12 @@ class MyStrategy:
         if unit == game.units[-1]:
             while True:
                 if self.my_unit.ammo[self.my_unit.weapon] == 0:
+                    self.action = None
                     self.replenish_ammo(game, self.my_unit.weapon)
+                    if self.obstacle_is_near():
+                        self.go_around_an_obstacle()
                     break
-                if self.my_unit.ammo[self.my_unit.weapon] > 0:
-                    self.shooting()
+                self.shooting()
                 if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
                     self.set_move_direction(self.target_enemy.position, 1)
                 else:
@@ -187,6 +185,8 @@ class MyStrategy:
                 if game.zone.current_radius - calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
                     vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
                     self.set_move_direction(add_vectors(self.move_direction, vec_to_zone), 1)
+                if self.obstacle_is_near():
+                    self.go_around_an_obstacle()
                 break
         self.passed_obstacles.clear()
 
