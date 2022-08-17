@@ -51,6 +51,7 @@ class MyStrategy:
     def choose_enemy(self, game: Game, enemy: Unit):
         distance_to_enemy = calc_distance(self.my_unit.position, enemy.position)
         if distance_to_enemy < self.distance_to_nearest_enemy:
+            self.distance_to_nearest_enemy = distance_to_enemy
             self.target_enemy = enemy
 
     def choose_shield(self, loot: Game.loot, item_tag: int):
@@ -232,11 +233,10 @@ class MyStrategy:
             if unit.player_id != game.my_id:
                 self.enemy_is_near_actions(game, unit)
                 continue
-            self.my_unit = unit
             if unit == game.units[-1]:
                 self.enemy_is_not_near_actions(game, unit)     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-            debug_interface.add_placed_text(unit.position, "{}".format(self.initial_direction), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        debug_interface.add_placed_text(self.my_unit.position, "{}\n{}".format(self.target_enemy.id, ids), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
