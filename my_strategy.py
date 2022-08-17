@@ -18,7 +18,6 @@ from typing import List
 import random
 from my_modules.game_math import calc_distance, calc_angle, add_vectors, to_ort
 
-EPS = 0.01
 PROB_OF_DIRECTION_CHANGE = 0.007
 weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
 loot = {"Weapon": 0, "Shield": 1, "Ammo": 2}
@@ -35,6 +34,9 @@ class MyStrategy:
     passed_obstacles: List[Obstacle]
     action: ActionOrder
     constants: Constants
+    initial_direction: Vec2
+    obstacle_passed: bool
+    nearby_enemies: List[Unit]
 
     def set_view_direction(self, target_point: Vec2):
         self.view_direction.x = target_point.x - self.my_unit.position.x
@@ -55,6 +57,19 @@ class MyStrategy:
             self.action = ActionOrder.Aim(True)
         else:
             self.action = ActionOrder.Aim(False)
+
+    def remember_enemy(self, enemy: Unit):
+        index = self.enemy_is_remembered(enemy)
+        if self.enemy_is_remembered(enemy) >= 0:
+            self.nearby_enemies[index] = enemy
+        else:
+            self.nearby_enemies.append(enemy)
+
+    def enemy_is_remembered(self, enemy):
+        for i in range(len(self.nearby_enemies)):
+            if self.nearby_enemies[i].id == enemy.id:
+                return i
+        return -1
 
     def choose_enemy(self, game: Game, enemy: Unit):
         distance_to_enemy = calc_distance(self.my_unit.position, enemy.position)
@@ -114,7 +129,7 @@ class MyStrategy:
         else:
             self.obstacle_passed = True
 
-    def get_correction_vector(self, target_angle, obstacle_angle, obstacle_vec):
+    def get_correction_vector(self, target_angle: float, obstacle_angle: float, obstacle_vec: Vec2):
         if abs(obstacle_angle - target_angle) < 180:
             if target_angle < obstacle_angle:
                 correction_vec = Vec2(obstacle_vec.y, -obstacle_vec.x)
@@ -166,8 +181,11 @@ class MyStrategy:
         self.set_move_direction(self.target_obstacle.position, 1)
         self.set_view_direction(self.target_obstacle.position)
 
-    def enemy_is_near_actions(self, game, unit):
+    def enemy_is_near_actions(self, game: Game, unit: Unit):
         self.enemy_is_near = True
+        self.remember_enemy(unit)
+        self.check_dead_enemies(unit)
+        print(unit.health)
         self.choose_enemy(game, unit)
         if unit == game.units[-1]:
             while True:
@@ -190,7 +208,7 @@ class MyStrategy:
                 break
         self.passed_obstacles.clear()
 
-    def enemy_is_not_near_actions(self, game, unit):
+    def enemy_is_not_near_actions(self, game: Game, unit: Unit):
         distance_to_current_zone_centre = calc_distance(self.my_unit.position, game.zone.current_center)
         self.action = None
         self.enemy_is_near = False
@@ -229,9 +247,10 @@ class MyStrategy:
         self.passed_obstacles = []
         self.action = None
         self.constants = constants
-
         self.initial_direction = Vec2(1, 1)
         self.obstacle_passed = True
+        self.nearby_enemies = []
+        self.nearby_enemies_health = []
 
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
         self.distance_to_nearest_enemy = self.constants.view_distance
@@ -241,11 +260,12 @@ class MyStrategy:
         for unit in game.units:
             if unit.player_id != game.my_id:
                 self.enemy_is_near_actions(game, unit)
+                # debug_interface.add_placed_text(unit.position, "{}".format(unit.health), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
                 continue
             if unit == game.units[-1]:
                 self.enemy_is_not_near_actions(game, unit)     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        debug_interface.add_placed_text(self.my_unit.position, "{}".format(self.target_enemy.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        debug_interface.add_placed_text(self.my_unit.position, "{}".format(len(self.nearby_enemies)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
