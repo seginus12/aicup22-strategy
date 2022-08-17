@@ -48,6 +48,14 @@ class MyStrategy:
         coef = calc_distance(self.my_unit.position, enemy.position) / self.constants.weapons[self.my_unit.weapon].projectile_speed
         return Vec2(enemy.position.x + enemy.velocity.x * coef, enemy.position.y + enemy.velocity.y * coef)
 
+    def shooting(self):
+        predicted_position = self.predict_enemy_position(self.target_enemy)
+        self.set_view_direction(predicted_position)
+        if calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
+            self.action = ActionOrder.Aim(True)
+        else:
+            self.action = ActionOrder.Aim(False)
+
     def choose_enemy(self, game: Game, enemy: Unit):
         distance_to_enemy = calc_distance(self.my_unit.position, enemy.position)
         if distance_to_enemy < self.distance_to_nearest_enemy:
@@ -166,19 +174,20 @@ class MyStrategy:
         self.enemy_is_near = True
         self.choose_enemy(game, unit)
         if unit == game.units[-1]:
-            predicted_position = self.predict_enemy_position(self.target_enemy)
-            self.set_view_direction(predicted_position)
-            if calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
-                self.action = ActionOrder.Aim(True)
-            else:
-                self.action = ActionOrder.Aim(False)
-            if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
-                self.set_move_direction(self.target_enemy.position, 1)
-            else:
-                self.set_move_direction(self.target_enemy.position, -1)
-            if game.zone.current_radius - calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
-                vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
-                self.set_move_direction(add_vectors(self.move_direction, vec_to_zone), 1)
+            while True:
+                if self.my_unit.ammo[self.my_unit.weapon] == 0:
+                    self.replenish_ammo(game, self.my_unit.weapon)
+                    break
+                if self.my_unit.ammo[self.my_unit.weapon] > 0:
+                    self.shooting()
+                if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
+                    self.set_move_direction(self.target_enemy.position, 1)
+                else:
+                    self.set_move_direction(self.target_enemy.position, -1)
+                if game.zone.current_radius - calc_distance(self.my_unit.position, game.zone.current_center) < self.constants.unit_radius*2:
+                    vec_to_zone = Vec2(game.zone.current_center.x - self.my_unit.position.x, game.zone.current_center.y - self.my_unit.position.y)
+                    self.set_move_direction(add_vectors(self.move_direction, vec_to_zone), 1)
+                break
         self.passed_obstacles.clear()
 
     def enemy_is_not_near_actions(self, game, unit):
@@ -236,7 +245,7 @@ class MyStrategy:
             if unit == game.units[-1]:
                 self.enemy_is_not_near_actions(game, unit)     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        debug_interface.add_placed_text(self.my_unit.position, "{}\n{}".format(self.target_enemy.id, ids), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        debug_interface.add_placed_text(self.my_unit.position, "{}".format(self.target_enemy.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
