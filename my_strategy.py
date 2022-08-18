@@ -58,6 +58,22 @@ class MyStrategy:
         else:
             self.action = ActionOrder.Aim(False)
 
+    def calc_view_angle(self):
+        return self.constants.field_of_view - (self.constants.field_of_view - self.constants.weapons[self.my_unit.weapon].aim_field_of_view) * self.my_unit.aim
+
+    def calc_extreme_view_angles(self):
+        view_point = calc_angle(self.my_unit.direction)
+        fov = self.calc_view_angle()
+        if view_point - fov / 2 >= 0:
+            smaller_angle = view_point - fov / 2
+        else:
+            smaller_angle = view_point - fov / 2 + 360
+        if view_point + fov / 2 <= 360:
+            larger_angle = view_point + fov / 2
+        else:
+            larger_angle = view_point + fov / 2 - 360
+        return [smaller_angle, larger_angle]
+
     def remember_enemy(self, enemy: Unit):
         index = self.enemy_is_remembered(enemy)
         if self.enemy_is_remembered(enemy) >= 0:
@@ -184,8 +200,7 @@ class MyStrategy:
     def enemy_is_near_actions(self, game: Game, unit: Unit):
         self.enemy_is_near = True
         self.remember_enemy(unit)
-        self.check_dead_enemies(unit)
-        print(unit.health)
+        # self.check_dead_enemies(unit)
         self.choose_enemy(game, unit)
         if unit == game.units[-1]:
             while True:
@@ -265,7 +280,7 @@ class MyStrategy:
             if unit == game.units[-1]:
                 self.enemy_is_not_near_actions(game, unit)     
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        debug_interface.add_placed_text(self.my_unit.position, "{}".format(len(self.nearby_enemies)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        debug_interface.add_placed_text(self.my_unit.position, "{}".format(self.calc_extreme_view_angles()), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
