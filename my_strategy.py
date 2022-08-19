@@ -16,7 +16,8 @@ from debug_interface import DebugInterface
 from debugging.color import Color
 from typing import List
 import random
-from my_modules.game_math import calc_distance, calc_angle, add_vectors, to_ort
+import copy
+from my_modules.game_math import calc_distance, calc_angle, add_vectors, calc_tangents, to_ort
 
 PROB_OF_DIRECTION_CHANGE = 0.007
 weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
@@ -36,7 +37,7 @@ class MyStrategy:
     constants: Constants
     initial_direction: Vec2
     obstacle_passed: bool
-    nearby_enemies: List[Unit]
+    remembered_enemies: List[Unit]
 
     def set_view_direction(self, target_point: Vec2):
         self.view_direction.x = target_point.x - self.my_unit.position.x
@@ -74,16 +75,38 @@ class MyStrategy:
             larger_angle = view_point + fov / 2 - 360
         return [smaller_angle, larger_angle]
 
-    def remember_enemy(self, enemy: Unit):
-        index = self.enemy_is_remembered(enemy)
-        if self.enemy_is_remembered(enemy) >= 0:
-            self.nearby_enemies[index] = enemy
-        else:
-            self.nearby_enemies.append(enemy)
+    def calc_enemy_angle(self, enemy: Unit):
+        vec_to_enemy = Vec2(enemy.position.x - self.my_unit.position.x, enemy.position.y - self.my_unit.position.y)
+        return calc_angle(vec_to_enemy)
 
-    def enemy_is_remembered(self, enemy):
-        for i in range(len(self.nearby_enemies)):
-            if self.nearby_enemies[i].id == enemy.id:
+    def remember_enemy(self, enemy: Unit):
+        index = self.unit_in_list(self.remembered_enemies, enemy)
+        if index >= 0:
+            self.remembered_enemies[index] = enemy
+        else:
+            self.remembered_enemies.append(enemy)
+
+    def check_missing_enemies(self, game: Game, debug_interface):
+        visible_enemies = self.get_visible_enemies(game.units)
+        n = len(self.remembered_enemies)
+        i = 0
+        while i < n:
+            index = self.unit_in_list(visible_enemies, self.remembered_enemies[i])
+            if index < 0:
+                if self.remembered_enemies[i].health <= self.constants.unit_health / 5:
+                    self.remembered_enemies.pop(i)
+                    n -= 1
+            i += 1
+
+    def get_visible_enemies(self, units: List[Unit]):
+        visible_enemies = copy.deepcopy(units)
+        for i in range(self.constants.team_size):
+            visible_enemies.pop(i)
+        return visible_enemies
+
+    def unit_in_list(self, list: List[Unit], unit: Unit):
+        for i in range(len(list)):
+            if list[i].id == unit.id:
                 return i
         return -1
 
@@ -197,13 +220,13 @@ class MyStrategy:
         self.set_move_direction(self.target_obstacle.position, 1)
         self.set_view_direction(self.target_obstacle.position)
 
-    def enemy_is_near_actions(self, game: Game, unit: Unit):
-        self.enemy_is_near = True
+    def enemy_is_near_actions(self, game: Game, unit: Unit, debug_interface):
         self.remember_enemy(unit)
         # self.check_dead_enemies(unit)
         self.choose_enemy(game, unit)
         if unit == game.units[-1]:
             while True:
+                self.check_missing_enemies(game, debug_interface)
                 if self.my_unit.ammo[self.my_unit.weapon] == 0:
                     self.action = None
                     self.replenish_ammo(game, self.my_unit.weapon)
@@ -264,23 +287,25 @@ class MyStrategy:
         self.constants = constants
         self.initial_direction = Vec2(1, 1)
         self.obstacle_passed = True
-        self.nearby_enemies = []
-        self.nearby_enemies_health = []
+        self.remembered_enemies = []
 
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
         self.distance_to_nearest_enemy = self.constants.view_distance
         orders = {}
         self.my_unit = game.units[0]
         self.target_enemy = game.units[0]
+        # visible_enemies = self.get_visible_enemies(game.units)
         for unit in game.units:
             if unit.player_id != game.my_id:
-                self.enemy_is_near_actions(game, unit)
-                # debug_interface.add_placed_text(unit.position, "{}".format(unit.health), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+                self.enemy_is_near_actions(game, unit, debug_interface)
+                # debug_interface.add_placed_text(unit.position, "{}".format(self.calc_enemy_angle(unit)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
                 continue
             if unit == game.units[-1]:
-                self.enemy_is_not_near_actions(game, unit)     
+                self.enemy_is_not_near_actions(game, unit)
+            else:
+                self.enemy_is_near = True
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        debug_interface.add_placed_text(self.my_unit.position, "{}".format(self.calc_extreme_view_angles()), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        debug_interface.add_placed_text(self.my_unit.position, "{}".format(calc_tangents(self.target_enemy.position, 1, self.my_unit.position)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
