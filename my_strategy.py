@@ -17,7 +17,7 @@ from debugging.color import Color
 from typing import List
 import random
 import copy
-from my_modules.game_math import calc_distance, calc_angle, add_vectors, calc_tangents, to_ort
+from my_modules.game_math import calc_distance, calc_angle, add_vectors, calc_tangent_points, to_ort
 
 PROB_OF_DIRECTION_CHANGE = 0.007
 weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
@@ -91,13 +91,23 @@ class MyStrategy:
         n = len(self.remembered_enemies)
         i = 0
         while i < n:
-            index = self.unit_in_list(visible_enemies, self.remembered_enemies[i])
-            if index < 0:
-                if self.remembered_enemies[i].health <= self.constants.unit_health / 5:
+            is_visible = self.unit_in_list(visible_enemies, self.remembered_enemies[i])
+            if is_visible < 0:
+                if self.enemy_in_visible_zone(self.remembered_enemies[i], debug_interface):
                     self.remembered_enemies.pop(i)
                     n -= 1
             i += 1
 
+    def enemy_in_visible_zone(self, enemy: Unit):
+        extreme_angles = self.calc_extreme_view_angles()
+        max_enemy_displacement = calc_tangent_points(enemy.position, self.constants.unit_radius + self.constants.max_unit_forward_speed / self.constants.ticks_per_second, self.my_unit.position)
+        max_enemy_displacement_angle_0 = calc_angle(Vec2(max_enemy_displacement[0].x - self.my_unit.position.x, max_enemy_displacement[0].y - self.my_unit.position.y))
+        max_enemy_displacement_angle_1 = calc_angle(Vec2(max_enemy_displacement[1].x - self.my_unit.position.x, max_enemy_displacement[1].y - self.my_unit.position.y))
+        max_displacement_length = calc_distance(self.my_unit.position, enemy.position) + self.constants.max_unit_forward_speed / self.constants.ticks_per_second
+        if max_enemy_displacement_angle_0 > extreme_angles[0] and max_enemy_displacement_angle_1 < extreme_angles[1] and max_displacement_length < self.constants.view_distance:
+            return True
+        return False
+        
     def get_visible_enemies(self, units: List[Unit]):
         visible_enemies = copy.deepcopy(units)
         for i in range(self.constants.team_size):
@@ -294,18 +304,18 @@ class MyStrategy:
         orders = {}
         self.my_unit = game.units[0]
         self.target_enemy = game.units[0]
-        # visible_enemies = self.get_visible_enemies(game.units)
         for unit in game.units:
             if unit.player_id != game.my_id:
                 self.enemy_is_near_actions(game, unit, debug_interface)
-                # debug_interface.add_placed_text(unit.position, "{}".format(self.calc_enemy_angle(unit)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+                # debug_interface.add_placed_text(unit.position, "{}".format(unit.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
                 continue
             if unit == game.units[-1]:
                 self.enemy_is_not_near_actions(game, unit)
             else:
                 self.enemy_is_near = True
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        debug_interface.add_placed_text(self.my_unit.position, "{}".format(calc_tangents(self.target_enemy.position, 1, self.my_unit.position)), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        extreme_angles = self.calc_extreme_view_angles()
+        debug_interface.add_placed_text(self.my_unit.position, "{}\n{:.1f} {:.1f}".format(self.remembered_enemies, extreme_angles[0], extreme_angles[1]), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass

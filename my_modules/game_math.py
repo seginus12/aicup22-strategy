@@ -1,7 +1,5 @@
-from cmath import pi
-from multiprocessing import pool
 from model.vec2 import Vec2
-from math import acos, degrees, pow, cos, sin
+from math import acos, degrees, pow, cos, sin, pi
 
 def calc_distance(point1: Vec2, point2: Vec2):
         x_projection = point2.x - point1.x
@@ -37,9 +35,8 @@ def to_ort(vec: Vec2):
         cos = vec.x / hypotenuse
         return Vec2(cos, sin)
 
-def calc_tangents(center: Vec2, radius: float, point: Vec2):
+def calc_tangent_points(center: Vec2, radius: float, point: Vec2):
         distance_to_center = calc_distance(center, point)
-        print(distance_to_center)
         tangent_length = pow(pow(distance_to_center, 2) - pow(radius, 2), 0.5)
         vec_to_point = Vec2(center.x - point.x, center.y - point.y)
         target_angle = calc_angle_radians(vec_to_point)
