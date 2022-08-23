@@ -1,5 +1,5 @@
 from model.vec2 import Vec2
-from math import acos, degrees, pow, cos, sin, pi
+from math import *
 
 def calc_distance(point1: Vec2, point2: Vec2):
         x_projection = point2.x - point1.x
@@ -28,6 +28,9 @@ def calc_angle_radians(vec: Vec2):
 
 def add_vectors(vec1: Vec2, vec2: Vec2):
         return Vec2(vec1.x + vec2.x, vec1.y + vec2.y)
+
+def get_vec(initial_point: Vec2, target_point: Vec2):
+        return Vec2(target_point.x - initial_point.x, target_point.y - initial_point.y)
 
 def to_ort(vec: Vec2):
         hypotenuse  = calc_distance(Vec2(0, 0), vec)

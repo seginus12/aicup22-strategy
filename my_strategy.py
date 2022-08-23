@@ -20,8 +20,10 @@ import copy
 from my_modules.game_math import *
 
 PROB_OF_DIRECTION_CHANGE = 0.007
-weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
-loot = {"Weapon": 0, "Shield": 1, "Ammo": 2}
+MAX_APPROACH_TO_ZONE = 4
+MAX_APPROACH_TO_OBSTACLE = 2
+WEAPONS = {"Magic wand": 0, "Staff": 1, "Bow": 2}
+LOOT = {"Weapon": 0, "Shield": 1, "Ammo": 2}
 
 class MyStrategy:
     my_unit: Unit
@@ -54,7 +56,7 @@ class MyStrategy:
     def shooting(self):
         predicted_position = self.predict_enemy_position(self.target_enemy)
         self.set_view_direction(predicted_position)
-        if calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[weapons["Magic wand"]].projectile_speed + 5:
+        if calc_distance(self.target_enemy.position, self.my_unit.position) < self.constants.weapons[WEAPONS["Magic wand"]].projectile_speed + 5:
             self.action = ActionOrder.Aim(True)
         else:
             self.action = ActionOrder.Aim(False)
@@ -74,10 +76,6 @@ class MyStrategy:
         else:
             larger_angle = view_point + fov / 2 - 360
         return [smaller_angle, larger_angle]
-
-    def calc_enemy_angle(self, enemy: Unit):
-        vec_to_enemy = Vec2(enemy.position.x - self.my_unit.position.x, enemy.position.y - self.my_unit.position.y)
-        return calc_angle(vec_to_enemy)
 
     def remember_enemy(self, enemy: Unit):
         is_rembered = self.unit_in_list(self.remembered_enemies, enemy)
@@ -100,10 +98,10 @@ class MyStrategy:
 
     def enemy_in_visible_zone(self, enemy: Unit):
         extreme_angles = self.calc_extreme_view_angles()
-        max_enemy_displacement = calc_tangent_points(enemy.position, self.constants.unit_radius + self.constants.max_unit_forward_speed / self.constants.ticks_per_second, self.my_unit.position)
-        max_enemy_displacement_angle_0 = calc_angle(Vec2(max_enemy_displacement[0].x - self.my_unit.position.x, max_enemy_displacement[0].y - self.my_unit.position.y))
-        max_enemy_displacement_angle_1 = calc_angle(Vec2(max_enemy_displacement[1].x - self.my_unit.position.x, max_enemy_displacement[1].y - self.my_unit.position.y))
-        max_displacement_length = calc_distance(self.my_unit.position, enemy.position) + self.constants.max_unit_forward_speed / self.constants.ticks_per_second
+        max_enemy_displacement = calc_tangent_points(enemy.position, self.constants.unit_radius + self.max_tick_passed_distance, self.my_unit.position)
+        max_enemy_displacement_angle_0 = calc_angle(get_vec(self.my_unit.position, max_enemy_displacement[0]))
+        max_enemy_displacement_angle_1 = calc_angle(get_vec(self.my_unit.position, max_enemy_displacement[1]))
+        max_displacement_length = calc_distance(self.my_unit.position, enemy.position) + self.max_tick_passed_distance
         if max_enemy_displacement_angle_0 > extreme_angles[0] and max_enemy_displacement_angle_1 < extreme_angles[1] and max_displacement_length < self.constants.view_distance:
             return True
         return False
@@ -174,7 +172,7 @@ class MyStrategy:
     def maneuver(self, obstacle_position: Vec2):
         target_vec = to_ort(self.move_direction)
         target_angle = calc_angle(self.move_direction)
-        obstacle_vec = to_ort(Vec2(obstacle_position.x - self.my_unit.position.x, obstacle_position.y - self.my_unit.position.y))
+        obstacle_vec = to_ort(get_vec(self.my_unit.position, obstacle_position))
         obstacle_angle = calc_angle(obstacle_vec)
         not_is_normal = abs(obstacle_angle - calc_angle(self.initial_direction))
         if not_is_normal < 90 or not_is_normal > 270:
@@ -207,21 +205,21 @@ class MyStrategy:
         return False
 
     def replenish_shields(self, game: Game):
-        self.choose_shield(game.loot, loot["Shield"])
+        self.choose_shield(game.loot, LOOT["Shield"])
         self.set_move_direction(self.target_shield.position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.target_shield.position)
         if calc_distance(self.my_unit.position, self.target_shield.position) < self.constants.unit_radius:
             self.action = ActionOrder.Pickup(self.target_shield.id)
 
     def replenish_ammo(self, game: Game, weapon_index: int):
-        self.choose_ammo(game.loot, loot["Ammo"], weapon_index)
+        self.choose_ammo(game.loot, LOOT["Ammo"], weapon_index)
         self.set_move_direction(self.target_ammo.position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.target_ammo.position)
         if calc_distance(self.my_unit.position, self.target_ammo.position) < self.constants.unit_radius:
             self.action = ActionOrder.Pickup(self.target_ammo.id)
 
     def free_movement(self):
-        random_point = Vec2(random.uniform(-10, 10), random.uniform(-10, 10))
+        random_point = Vec2(random.uniform(-1, 1), random.uniform(-1, 1))
         self.set_move_direction(random_point, self.constants.max_unit_forward_speed)
         self.set_view_direction(random_point)
 
@@ -231,7 +229,7 @@ class MyStrategy:
 
     def move_to_obstacle(self):
         distace_to_target_obstacle = calc_distance(self.my_unit.position, self.target_obstacle.position)
-        if distace_to_target_obstacle < (self.target_obstacle.radius + self.constants.unit_radius * 2) or distace_to_target_obstacle > self.constants.view_distance:
+        if distace_to_target_obstacle < (self.target_obstacle.radius + self.constants.unit_radius * MAX_APPROACH_TO_OBSTACLE) or distace_to_target_obstacle > self.constants.view_distance:
             self.target_obstacle = self.get_closest_obstacle(self.my_unit.position)
             self.passed_obstacles.append(self.target_obstacle)
         self.set_move_direction(self.target_obstacle.position, 1)
@@ -249,7 +247,7 @@ class MyStrategy:
                         self.go_around_an_obstacle()
                     break
                 self.shooting()
-                if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[weapons["Magic wand"]].projectile_speed:
+                if calc_distance(self.target_enemy.position, self.my_unit.position) > self.constants.weapons[WEAPONS["Magic wand"]].projectile_speed:
                     self.set_move_direction(self.target_enemy.position, 1)
                 else:
                     self.set_move_direction(self.target_enemy.position, -1)
@@ -269,7 +267,7 @@ class MyStrategy:
             if self.obstacle_is_near():
                 self.go_around_an_obstacle()
                 break
-            if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius*4:
+            if game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius * MAX_APPROACH_TO_ZONE:
                 self.move_to_next_zone(game.zone.next_center)
                 break
             if unit.shield_potions > 0 and unit.shield < self.constants.max_shield:
@@ -287,9 +285,10 @@ class MyStrategy:
             break
 
     def __init__(self, constants: Constants):
-        x = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
-        y = random.uniform(-constants.max_unit_forward_speed, constants.max_unit_forward_speed)
-        self.move_direction = Vec2(x*10, y*10)
+        self.max_tick_passed_distance = self.constants.max_unit_forward_speed / self.constants.ticks_per_second
+        x = random.uniform(-1, 1) * constants.max_unit_forward_speed
+        y = random.uniform(-1, 1) * constants.max_unit_forward_speed
+        self.move_direction = Vec2(x, y)
         self.view_direction = Vec2(x, y)
         self.my_unit = None
         self.enemy_is_near = False
