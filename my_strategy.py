@@ -17,7 +17,7 @@ from debugging.color import Color
 from typing import List
 import random
 import copy
-from my_modules.game_math import calc_distance, calc_angle, add_vectors, calc_tangent_points, to_ort
+from my_modules.game_math import *
 
 PROB_OF_DIRECTION_CHANGE = 0.007
 weapons = {"Magic wand": 0, "Staff": 1, "Bow": 2}
@@ -80,22 +80,22 @@ class MyStrategy:
         return calc_angle(vec_to_enemy)
 
     def remember_enemy(self, enemy: Unit):
-        index = self.unit_in_list(self.remembered_enemies, enemy)
-        if index >= 0:
-            self.remembered_enemies[index] = enemy
+        is_rembered = self.unit_in_list(self.remembered_enemies, enemy)
+        if is_rembered >= 0:
+            self.remembered_enemies[is_rembered] = enemy
         else:
             self.remembered_enemies.append(enemy)
 
-    def check_missing_enemies(self, game: Game, debug_interface):
+    def update_remebered_enemies(self, game: Game, debug_interface):
         visible_enemies = self.get_visible_enemies(game.units)
-        n = len(self.remembered_enemies)
+        remembrered_enemies_count = len(self.remembered_enemies)
         i = 0
-        while i < n:
+        while i < remembrered_enemies_count:
             is_visible = self.unit_in_list(visible_enemies, self.remembered_enemies[i])
             if is_visible < 0:
-                if self.enemy_in_visible_zone(self.remembered_enemies[i], debug_interface):
+                if self.enemy_in_visible_zone(self.remembered_enemies[i]):
                     self.remembered_enemies.pop(i)
-                    n -= 1
+                    remembrered_enemies_count -= 1
             i += 1
 
     def enemy_in_visible_zone(self, enemy: Unit):
@@ -107,12 +107,19 @@ class MyStrategy:
         if max_enemy_displacement_angle_0 > extreme_angles[0] and max_enemy_displacement_angle_1 < extreme_angles[1] and max_displacement_length < self.constants.view_distance:
             return True
         return False
-        
+
+    def check_remebrered_enemies(self, units: List[Unit]):
+        self.set_move_direction(self.remembered_enemies[-1].position, self.constants.max_unit_forward_speed)
+        self.set_view_direction(self.remembered_enemies[-1].position)
+
     def get_visible_enemies(self, units: List[Unit]):
         visible_enemies = copy.deepcopy(units)
         for i in range(self.constants.team_size):
             visible_enemies.pop(i)
         return visible_enemies
+
+    def get_my_units(self):
+        pass
 
     def unit_in_list(self, list: List[Unit], unit: Unit):
         for i in range(len(list)):
@@ -232,11 +239,9 @@ class MyStrategy:
 
     def enemy_is_near_actions(self, game: Game, unit: Unit, debug_interface):
         self.remember_enemy(unit)
-        # self.check_dead_enemies(unit)
         self.choose_enemy(game, unit)
         if unit == game.units[-1]:
             while True:
-                self.check_missing_enemies(game, debug_interface)
                 if self.my_unit.ammo[self.my_unit.weapon] == 0:
                     self.action = None
                     self.replenish_ammo(game, self.my_unit.weapon)
@@ -304,13 +309,17 @@ class MyStrategy:
         orders = {}
         self.my_unit = game.units[0]
         self.target_enemy = game.units[0]
+        self.update_remebered_enemies(game, debug_interface)
         for unit in game.units:
             if unit.player_id != game.my_id:
                 self.enemy_is_near_actions(game, unit, debug_interface)
                 # debug_interface.add_placed_text(unit.position, "{}".format(unit.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
                 continue
             if unit == game.units[-1]:
-                self.enemy_is_not_near_actions(game, unit)
+                if len(self.remembered_enemies) != 0:
+                    self.check_remebrered_enemies(game.units)
+                else:
+                    self.enemy_is_not_near_actions(game, unit)
             else:
                 self.enemy_is_near = True
             orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
