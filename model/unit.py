@@ -131,34 +131,4 @@ class Unit:
     def __repr__(self):
         return "Unit(" + \
             repr(self.id) + \
-            ", " + \
-            repr(self.player_id) + \
-            ", " + \
-            repr(self.health) + \
-            ", " + \
-            repr(self.shield) + \
-            ", " + \
-            repr(self.extra_lives) + \
-            ", " + \
-            repr(self.position) + \
-            ", " + \
-            repr(self.remaining_spawn_time) + \
-            ", " + \
-            repr(self.velocity) + \
-            ", " + \
-            repr(self.direction) + \
-            ", " + \
-            repr(self.aim) + \
-            ", " + \
-            repr(self.action) + \
-            ", " + \
-            repr(self.health_regeneration_start_tick) + \
-            ", " + \
-            repr(self.weapon) + \
-            ", " + \
-            repr(self.next_shot_tick) + \
-            ", " + \
-            repr(self.ammo) + \
-            ", " + \
-            repr(self.shield_potions) + \
             ")"
