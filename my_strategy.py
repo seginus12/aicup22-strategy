@@ -28,6 +28,7 @@ LOOT = {"Weapon": 0, "Shield": 1, "Ammo": 2}
 
 class MyStrategy:
     my_units: List[Unit]
+    enemies: List[Unit]
     move_direction: Vec2
     view_direction: Vec2
     enemy_is_near: bool
@@ -117,9 +118,15 @@ class MyStrategy:
             visible_enemies.pop(i)
         return visible_enemies
 
-    def get_my_units(self, units: List[Unit]):
-
-        pass
+    def distribute_units(self, units: List[Unit], my_id):
+        my_units = []
+        enemeis = []
+        for unit in units:
+            if unit.player_id == my_id:
+                my_units.append(unit)
+            else:
+                enemeis.append(unit)
+        return my_units, enemeis
 
     def unit_in_list(self, list: List[Unit], unit: Unit):
         for i in range(len(list)):
@@ -283,7 +290,8 @@ class MyStrategy:
         self.move_direction = Vec2(x, y)
         self.view_direction = Vec2(x, y)
         self.my_units = []
-        self.enemy_is_near = False
+        self.enemies = []
+        self.enemy_is_near = False # Remove
         self.target_enemy = None
         self.target_ammo = None
         self.target_shield = None
@@ -298,11 +306,8 @@ class MyStrategy:
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
         self.distance_to_nearest_enemy = self.constants.view_distance
         orders = {}
-        if len(self.my_units) == 0:
-            self.my_units.append(game.units[0])
-        else:
-            self.my_units[0] = game.units[0]
-        self.target_enemy = game.units[0]
+        self.my_units, self.enemies = self.distribute_units(game.units, game.my_id)
+        self.target_enemy = game.units[0] # Replace
         self.update_remebered_enemies(game, debug_interface)
         for unit in game.units:
             if unit.player_id != game.my_id:
