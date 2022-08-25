@@ -79,24 +79,34 @@ class MyStrategy:
             larger_angle = view_point + fov / 2 - 360
         return [smaller_angle, larger_angle]
 
-    def remember_enemy(self, enemy: Unit):
-        is_rembered = self.unit_in_list(self.remembered_enemies, enemy)
-        if is_rembered >= 0:
-            self.remembered_enemies[is_rembered] = enemy
-        else:
-            self.remembered_enemies.append(enemy)
+    def remember_new_enemies(self):
+        for enemy in self.enemies:
+            is_rembered = self.unit_in_list(self.remembered_enemies, enemy)
+            if is_rembered >= 0:
+                self.remembered_enemies[is_rembered] = enemy
+            else:
+                self.remembered_enemies.append(enemy)
 
-    def update_remebered_enemies(self, game: Game, debug_interface):
-        visible_enemies = self.get_visible_enemies(game.units)
+    def check_missing_enemies(self):
         remembrered_enemies_count = len(self.remembered_enemies)
         i = 0
         while i < remembrered_enemies_count:
-            is_visible = self.unit_in_list(visible_enemies, self.remembered_enemies[i])
+            is_visible = self.unit_in_list(self.enemies, self.remembered_enemies[i])
             if is_visible < 0:
                 if self.enemy_in_visible_zone(self.remembered_enemies[i]):
                     self.remembered_enemies.pop(i)
                     remembrered_enemies_count -= 1
             i += 1
+
+    def update_remebered_enemies(self, debug_interface):
+        self.check_missing_enemies()
+        self.remember_new_enemies()
+
+    def unit_in_list(self, list: List[Unit], unit: Unit):
+        for i in range(len(list)):
+            if list[i].id == unit.id:
+                return i
+        return -1
 
     def enemy_in_visible_zone(self, enemy: Unit):
         extreme_angles = self.calc_extreme_view_angles()
@@ -108,15 +118,9 @@ class MyStrategy:
             return True
         return False
 
-    def check_remebrered_enemies(self, units: List[Unit]):
+    def go_to_remebrered_enemies(self, units: List[Unit]):
         self.set_move_direction(self.remembered_enemies[-1].position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.remembered_enemies[-1].position)
-
-    def get_visible_enemies(self, units: List[Unit]):
-        visible_enemies = copy.deepcopy(units)
-        for i in range(self.constants.team_size):
-            visible_enemies.pop(i)
-        return visible_enemies
 
     def distribute_units(self, units: List[Unit], my_id):
         my_units = []
@@ -127,12 +131,6 @@ class MyStrategy:
             else:
                 enemeis.append(unit)
         return my_units, enemeis
-
-    def unit_in_list(self, list: List[Unit], unit: Unit):
-        for i in range(len(list)):
-            if list[i].id == unit.id:
-                return i
-        return -1
 
     def choose_enemy(self, game: Game, enemy: Unit):
         distance_to_enemy = calc_distance(self.my_units[0].position, enemy.position)
@@ -245,7 +243,6 @@ class MyStrategy:
         self.set_view_direction(self.target_obstacle.position)
 
     def enemy_is_near_actions(self, game: Game, unit: Unit, debug_interface):
-        self.remember_enemy(unit)
         self.choose_enemy(game, unit)
         if unit == game.units[-1]:
             while True:
@@ -291,6 +288,7 @@ class MyStrategy:
         self.view_direction = Vec2(x, y)
         self.my_units = []
         self.enemies = []
+        self.remembered_enemies = []
         self.enemy_is_near = False # Remove
         self.target_enemy = None
         self.target_ammo = None
@@ -301,14 +299,13 @@ class MyStrategy:
         self.constants = constants
         self.initial_direction = Vec2(1, 1)
         self.obstacle_passed = True
-        self.remembered_enemies = []
 
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
         self.distance_to_nearest_enemy = self.constants.view_distance
         orders = {}
         self.my_units, self.enemies = self.distribute_units(game.units, game.my_id)
         self.target_enemy = game.units[0] # Replace
-        self.update_remebered_enemies(game, debug_interface)
+        self.update_remebered_enemies(debug_interface)
         for unit in game.units:
             if unit.player_id != game.my_id:
                 self.enemy_is_near_actions(game, unit, debug_interface)
@@ -316,7 +313,7 @@ class MyStrategy:
                 continue
             if unit == game.units[-1]:
                 if len(self.remembered_enemies) != 0:
-                    self.check_remebrered_enemies(game.units)
+                    self.go_to_remebrered_enemies(game.units)
                 else:
                     self.enemy_is_not_near_actions(game, unit)
             else:
