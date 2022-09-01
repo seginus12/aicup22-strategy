@@ -29,6 +29,7 @@ LOOT = {"Weapon": 0, "Shield": 1, "Ammo": 2}
 class MyStrategy:
     my_units: List[Unit]
     enemies: List[Unit]
+    remembered_enemies: List[Unit]
     move_direction: Vec2
     view_direction: Vec2
     enemy_is_near: bool
@@ -41,7 +42,6 @@ class MyStrategy:
     constants: Constants
     initial_direction: Vec2
     obstacle_passed: bool
-    remembered_enemies: List[Unit]
 
     def set_view_direction(self, target_point: Vec2):
         self.view_direction.x = target_point.x - self.my_units[0].position.x
@@ -132,11 +132,12 @@ class MyStrategy:
                 enemeis.append(unit)
         return my_units, enemeis
 
-    def choose_enemy(self, game: Game, enemy: Unit):
-        distance_to_enemy = calc_distance(self.my_units[0].position, enemy.position)
-        if distance_to_enemy < self.distance_to_nearest_enemy:
-            self.distance_to_nearest_enemy = distance_to_enemy
-            self.target_enemy = enemy
+    def choose_enemy(self):
+        for enemy in self.remembered_enemies:
+            distance_to_enemy = calc_distance(self.my_units[0].position, enemy.position)
+            if distance_to_enemy < self.distance_to_nearest_enemy:
+                self.distance_to_nearest_enemy = distance_to_enemy
+                self.target_enemy = enemy
 
     def choose_shield(self, loot: Game.loot, item_tag: int):
         self.target_shield = loot[0]
@@ -243,7 +244,6 @@ class MyStrategy:
         self.set_view_direction(self.target_obstacle.position)
 
     def enemy_is_near_actions(self, game: Game, unit: Unit, debug_interface):
-        self.choose_enemy(game, unit)
         if unit == game.units[-1]:
             while True:
                 if self.my_units[0].ammo[self.my_units[0].weapon] == 0:
@@ -306,6 +306,8 @@ class MyStrategy:
         self.my_units, self.enemies = self.distribute_units(game.units, game.my_id)
         self.target_enemy = game.units[0] # Replace
         self.update_remebered_enemies(debug_interface)
+        if self.remembered_enemies:
+            self.choose_enemy()
         for unit in game.units:
             if unit.player_id != game.my_id:
                 self.enemy_is_near_actions(game, unit, debug_interface)
