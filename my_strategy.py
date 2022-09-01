@@ -118,7 +118,7 @@ class MyStrategy:
             return True
         return False
 
-    def go_to_remebrered_enemies(self, units: List[Unit]):
+    def go_to_remebrered_enemies(self):
         self.set_move_direction(self.remembered_enemies[-1].position, self.constants.max_unit_forward_speed)
         self.set_view_direction(self.remembered_enemies[-1].position)
 
@@ -243,40 +243,33 @@ class MyStrategy:
         self.set_move_direction(self.target_obstacle.position, 1)
         self.set_view_direction(self.target_obstacle.position)
 
-    def enemy_is_near_actions(self, game: Game, unit: Unit, debug_interface):
-        if unit == game.units[-1]:
-            while True:
-                if self.my_units[0].ammo[self.my_units[0].weapon] == 0:
-                    self.action = None
-                    self.replenish_ammo(game, self.my_units[0].weapon)
-                    if self.obstacle_is_near():
-                        self.go_around_an_obstacle()
-                    break
-                self.shooting()
-                if calc_distance(self.target_enemy.position, self.my_units[0].position) > self.constants.weapons[self.my_units[0].weapon].projectile_speed:
-                    self.set_move_direction(self.target_enemy.position, 1)
-                else:
-                    self.set_move_direction(self.target_enemy.position, -self.constants.max_unit_backward_speed)
-                if game.zone.current_radius - calc_distance(self.my_units[0].position, game.zone.current_center) < self.constants.unit_radius * MAX_APPROACH_TO_ZONE:
-                    vec_to_zone = get_vec(self.my_units[0].position, game.zone.current_center)
-                    self.set_move_direction(add_vectors(self.move_direction, vec_to_zone), 1)
-                if self.obstacle_is_near() and (self.move_direction.x != 0 or self.move_direction.y != 0):
-                    self.go_around_an_obstacle()
-                break
-        self.passed_obstacles.clear()
+    def keep_distance_to_enemy(self):
+        if calc_distance(self.target_enemy.position, self.my_units[0].position) > self.constants.weapons[self.my_units[0].weapon].projectile_speed:
+            self.set_move_direction(self.target_enemy.position, 1)
+        else:
+            self.set_move_direction(self.target_enemy.position, -self.constants.max_unit_backward_speed)
 
-    def enemy_is_not_near_actions(self, game: Game, unit: Unit):
-        distance_to_current_zone_centre = calc_distance(self.my_units[0].position, game.zone.current_center)
+    def actions(self, game: Game):
         self.action = None
-        self.enemy_is_near = False
-        if self.obstacle_is_near():
-            self.go_around_an_obstacle()
-        elif game.zone.current_radius - distance_to_current_zone_centre < self.constants.unit_radius * MAX_APPROACH_TO_ZONE:
+        if game.zone.current_radius - calc_distance(self.my_units[0].position, game.zone.current_center) < self.constants.unit_radius * MAX_APPROACH_TO_ZONE:
             self.move_to_next_zone(game.zone.next_center)
-        elif unit.shield_potions > 0 and unit.shield < self.constants.max_shield:
+        elif self.obstacle_is_near():
+            self.go_around_an_obstacle()
+        elif self.my_units[0].shield_potions > 0 and self.my_units[0].shield == 0:
             self.action = ActionOrder.UseShieldPotion()
-        elif unit.ammo[unit.weapon] < self.constants.weapons[unit.weapon].max_inventory_ammo and game.loot:
-            self.replenish_ammo(game, unit.weapon)
+        elif self.my_units[0].ammo[self.my_units[0].weapon] == 0:
+            self.replenish_ammo(game, self.my_units[0].weapon)
+        elif self.enemies:
+            self.keep_distance_to_enemy()
+            self.shooting()
+        elif self.remember_new_enemies():
+            self.go_to_remebrered_enemies()
+        elif self.my_units[0].shield_potions > 0 and self.my_units[0].shield < self.constants.max_shield:
+            self.action = ActionOrder.UseShieldPotion()
+        elif self.my_units[0].shield_potions < self.constants.max_shield_potions_in_inventory:
+            self.replenish_shields(game)
+        elif self.my_units[0].ammo[self.my_units[0].weapon] < self.constants.weapons[self.my_units[0].weapon].max_inventory_ammo and game.loot:
+            self.replenish_ammo(game, self.my_units[0].weapon)
         elif random.random() < PROB_OF_DIRECTION_CHANGE:
             self.free_movement()
 
@@ -289,7 +282,6 @@ class MyStrategy:
         self.my_units = []
         self.enemies = []
         self.remembered_enemies = []
-        self.enemy_is_near = False # Remove
         self.target_enemy = None
         self.target_ammo = None
         self.target_shield = None
@@ -308,21 +300,9 @@ class MyStrategy:
         self.update_remebered_enemies(debug_interface)
         if self.remembered_enemies:
             self.choose_enemy()
-        for unit in game.units:
-            if unit.player_id != game.my_id:
-                self.enemy_is_near_actions(game, unit, debug_interface)
-                # debug_interface.add_placed_text(unit.position, "{}".format(unit.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
-                continue
-            if unit == game.units[-1]:
-                if len(self.remembered_enemies) != 0:
-                    self.go_to_remebrered_enemies(game.units)
-                else:
-                    self.enemy_is_not_near_actions(game, unit)
-            else:
-                self.enemy_is_near = True
-            orders[unit.id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        extreme_angles = self.calc_extreme_view_angles()
-        debug_interface.add_placed_text(self.my_units[0].position, "{}\n{:.1f} {:.1f}".format(self.remembered_enemies, extreme_angles[0], extreme_angles[1]), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        self.actions(game)
+        orders[self.my_units[0].id] = UnitOrder(self.move_direction, self.view_direction, self.action)
+        debug_interface.add_placed_text(self.my_units[0].position, "{}".format(self.remembered_enemies), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
