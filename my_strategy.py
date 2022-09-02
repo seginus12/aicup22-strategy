@@ -114,9 +114,18 @@ class MyStrategy:
         max_enemy_displacement_angle_0 = calc_angle(get_vec(self.my_units[0].position, max_enemy_displacement[0]))
         max_enemy_displacement_angle_1 = calc_angle(get_vec(self.my_units[0].position, max_enemy_displacement[1]))
         max_displacement_length = calc_distance(self.my_units[0].position, enemy.position) + self.max_tick_passed_distance
-        if max_enemy_displacement_angle_0 > extreme_angles[0] and max_enemy_displacement_angle_1 < extreme_angles[1] and max_displacement_length < self.constants.view_distance:
-            return True
-        return False
+        if  abs(max_enemy_displacement_angle_0 - extreme_angles[0]) < 180 and abs(max_enemy_displacement_angle_1 - extreme_angles[1]) < 180:
+            if max_enemy_displacement_angle_0 > extreme_angles[0] and max_enemy_displacement_angle_1 < extreme_angles[1] and max_displacement_length < self.constants.view_distance:
+                return True
+            return False
+        if  abs(max_enemy_displacement_angle_0 - extreme_angles[0]) > 180 and abs(max_enemy_displacement_angle_1 - extreme_angles[1]) < 180:
+            if max_enemy_displacement_angle_0 < extreme_angles[0] and max_enemy_displacement_angle_1 < extreme_angles[1] and max_displacement_length < self.constants.view_distance:
+                return True
+            return False
+        if  abs(max_enemy_displacement_angle_0 - extreme_angles[0]) < 180 and abs(max_enemy_displacement_angle_1 - extreme_angles[1]) > 180:
+            if max_enemy_displacement_angle_0 > extreme_angles[0] and max_enemy_displacement_angle_1 > extreme_angles[1] and max_displacement_length < self.constants.view_distance:
+                return True
+            return False
 
     def go_to_remebrered_enemies(self):
         self.set_move_direction(self.remembered_enemies[-1].position, self.constants.max_unit_forward_speed)
@@ -262,14 +271,16 @@ class MyStrategy:
         elif self.enemies:
             self.keep_distance_to_enemy()
             self.shooting()
-        elif self.remember_new_enemies():
+        elif self.remembered_enemies:
             self.go_to_remebrered_enemies()
         elif self.my_units[0].shield_potions > 0 and self.my_units[0].shield < self.constants.max_shield:
             self.action = ActionOrder.UseShieldPotion()
-        elif self.my_units[0].shield_potions < self.constants.max_shield_potions_in_inventory:
+        elif self.my_units[0].shield_potions == 0:
             self.replenish_shields(game)
         elif self.my_units[0].ammo[self.my_units[0].weapon] < self.constants.weapons[self.my_units[0].weapon].max_inventory_ammo and game.loot:
             self.replenish_ammo(game, self.my_units[0].weapon)
+        elif self.my_units[0].shield_potions < self.constants.max_shield_potions_in_inventory:
+            self.replenish_shields(game)
         elif random.random() < PROB_OF_DIRECTION_CHANGE:
             self.free_movement()
 
@@ -293,7 +304,7 @@ class MyStrategy:
         self.obstacle_passed = True
 
     def get_order(self, game: Game, debug_interface: Optional[DebugInterface]) -> Order:
-        self.distance_to_nearest_enemy = self.constants.view_distance
+        self.distance_to_nearest_enemy = self.constants.view_distance # Remove
         orders = {}
         self.my_units, self.enemies = self.distribute_units(game.units, game.my_id)
         self.target_enemy = game.units[0] # Replace
