@@ -34,8 +34,7 @@ class MyStrategy:
     view_direction: Vec2
     enemy_is_near: bool
     target_enemy: Unit
-    target_ammo: Game.loot
-    target_shield: Game.loot
+    target_shield: Game.loot # remove
     target_obstacle: Obstacle
     passed_obstacles: List[Obstacle]
     action: ActionOrder
@@ -142,7 +141,7 @@ class MyStrategy:
         return my_units, enemeis
 
     def choose_enemy(self):
-        for enemy in self.remembered_enemies:
+        for enemy in self.enemies: # should be remembered enemies
             distance_to_enemy = calc_distance(self.my_units[0].position, enemy.position)
             if distance_to_enemy < self.distance_to_nearest_enemy:
                 self.distance_to_nearest_enemy = distance_to_enemy
@@ -156,11 +155,18 @@ class MyStrategy:
                     self.target_shield = loot_instance
     
     def choose_ammo(self, loot: Game.loot, item_tag: int, weapon_type: int):
-        self.target_ammo = loot[0]
+        target_ammo = None
+        for loot_instance in loot:
+            if loot_instance.item.TAG == item_tag:
+                target_ammo = loot_instance
+                break
+        if target_ammo == None:
+            return target_ammo
         for loot_instance in loot:
             if loot_instance.item.TAG == item_tag and loot_instance.item.weapon_type_index == weapon_type:
-                if calc_distance(self.my_units[0].position, loot_instance.position) < calc_distance(self.my_units[0].position, self.target_ammo.position):
-                    self.target_ammo = loot_instance
+                if calc_distance(self.my_units[0].position, loot_instance.position) < calc_distance(self.my_units[0].position, target_ammo.position):
+                    target_ammo = loot_instance
+        return target_ammo
     
     def get_closest_obstacle(self, initial_position: Vec2):
         if self.constants.obstacles[0] != self.target_obstacle:
@@ -229,11 +235,12 @@ class MyStrategy:
             self.action = ActionOrder.Pickup(self.target_shield.id)
 
     def replenish_ammo(self, game: Game, weapon_index: int):
-        self.choose_ammo(game.loot, LOOT["Ammo"], weapon_index)
-        self.set_move_direction(self.target_ammo.position, self.constants.max_unit_forward_speed)
-        self.set_view_direction(self.target_ammo.position)
-        if calc_distance(self.my_units[0].position, self.target_ammo.position) < self.constants.unit_radius:
-            self.action = ActionOrder.Pickup(self.target_ammo.id)
+        target_ammo = self.choose_ammo(game.loot, LOOT["Ammo"], weapon_index) # replace
+        if target_ammo != None:
+            self.set_move_direction(target_ammo.position, self.constants.max_unit_forward_speed)
+            self.set_view_direction(target_ammo.position)
+            if calc_distance(self.my_units[0].position, target_ammo.position) < self.constants.unit_radius:
+                self.action = ActionOrder.Pickup(target_ammo.id)
 
     def free_movement(self):
         random_point = Vec2(random.uniform(-1, 1), random.uniform(-1, 1))
@@ -294,7 +301,6 @@ class MyStrategy:
         self.enemies = []
         self.remembered_enemies = []
         self.target_enemy = None
-        self.target_ammo = None
         self.target_shield = None
         self.target_obstacle = constants.obstacles[0]
         self.passed_obstacles = []
@@ -307,13 +313,16 @@ class MyStrategy:
         self.distance_to_nearest_enemy = self.constants.view_distance # Remove
         orders = {}
         self.my_units, self.enemies = self.distribute_units(game.units, game.my_id)
-        self.target_enemy = game.units[0] # Replace
         self.update_remebered_enemies(debug_interface)
         if self.remembered_enemies:
             self.choose_enemy()
         self.actions(game)
         orders[self.my_units[0].id] = UnitOrder(self.move_direction, self.view_direction, self.action)
-        debug_interface.add_placed_text(self.my_units[0].position, "{}".format(self.remembered_enemies), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        if self.target_enemy != None:
+            debug_interface.add_placed_text(self.my_units[0].position, "{}\n{}".format(self.remembered_enemies, self.target_enemy.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+        for enemy in self.remembered_enemies:
+            dist = calc_distance(self.my_units[0].position, enemy.position)
+            debug_interface.add_placed_text(enemy.position, "{}\n{:.1f}".format(enemy.id, dist), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
