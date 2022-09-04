@@ -27,6 +27,7 @@ class MyStrategy:
     my_units: List[Unit]
     enemies: List[Unit]
     remembered_enemies: List[Unit]
+    closest_obstacles: List[Obstacle]
     move_direction: Vec2
     view_direction: Vec2
     enemy_is_near: bool
@@ -54,7 +55,7 @@ class MyStrategy:
     def shooting(self):
         predicted_position = self.predict_enemy_position(self.target_enemy)
         self.set_view_direction(predicted_position)
-        if calc_distance(self.target_enemy.position, self.my_units[0].position) < self.constants.weapons[self.my_units[0].weapon].projectile_speed * SHOOTING_DISTANCE_MULTIPLIER and not self.obstacle_on_the_way(self.target_enemy.position): # replace with closest obstacles
+        if calc_distance(self.target_enemy.position, self.my_units[0].position) < self.constants.weapons[self.my_units[0].weapon].projectile_speed * SHOOTING_DISTANCE_MULTIPLIER and not self.obstacle_on_the_way(self.target_enemy.position):
             self.action = ActionOrder.Aim(True)
         else:
             self.action = ActionOrder.Aim(False)
@@ -63,7 +64,7 @@ class MyStrategy:
         vec_to_enemy = get_vec(self.my_units[0].position, enemy_position)
         enemy_angle = calc_angle(vec_to_enemy)
         distance_to_enemy = calc_distance(self.my_units[0].position, enemy_position)
-        for obstacle in self.constants.obstacles:
+        for obstacle in self.closest_obstacles:
             if not obstacle.can_shoot_through:
                 distance_to_obstacle = calc_distance(self.my_units[0].position, obstacle.position)
                 if distance_to_enemy > distance_to_obstacle:
@@ -185,17 +186,24 @@ class MyStrategy:
         return target_ammo
     
     def get_closest_obstacle(self, initial_position: Vec2):
-        if self.constants.obstacles[0] != self.target_obstacle:
-            closest_obstacle = self.constants.obstacles[0]
+        if self.closest_obstacles[0] != self.target_obstacle:
+            closest_obstacle = self.closest_obstacles[0]
         else:
-            closest_obstacle = self.constants.obstacles[1]
+            closest_obstacle = self.closest_obstacles[1]
         dist_to_closest_obstacle = calc_distance(closest_obstacle.position, initial_position)
-        for obstacle in self.constants.obstacles:
+        for obstacle in self.closest_obstacles:
             distance_to_obstacle = calc_distance(initial_position, obstacle.position)
             if distance_to_obstacle < dist_to_closest_obstacle and obstacle not in self.passed_obstacles:
                 closest_obstacle = obstacle
                 dist_to_closest_obstacle = distance_to_obstacle
         return closest_obstacle
+
+    def get_closest_obstacles(self):
+        closest_obstacles = []
+        for obstacle in self.constants.obstacles:
+            if abs(obstacle.position.x - self.my_units[0].position.x < self.constants.view_distance) and abs(obstacle.position.y - self.my_units[0].position.y) < self.constants.view_distance:
+                closest_obstacles.append(obstacle)
+        self.closest_obstacles = closest_obstacles
 
     def go_around_an_obstacle(self):
         if self.obstacle_passed == True:
@@ -316,6 +324,7 @@ class MyStrategy:
         self.my_units = []
         self.enemies = []
         self.remembered_enemies = []
+        self.closest_obstacles = []
         self.target_enemy = None
         self.target_shield = None
         self.target_obstacle = constants.obstacles[0]
@@ -332,6 +341,7 @@ class MyStrategy:
         self.update_remebered_enemies(debug_interface)
         if self.remembered_enemies:
             self.choose_enemy()
+        self.get_closest_obstacles()
         self.actions(game)
         orders[self.my_units[0].id] = UnitOrder(self.move_direction, self.view_direction, self.action)
         if self.target_enemy != None:
