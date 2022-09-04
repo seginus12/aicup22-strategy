@@ -1,7 +1,5 @@
-from argparse import Action
 from email.errors import ObsoleteHeaderDefect
 from ssl import VERIFY_CRL_CHECK_LEAF
-from threading import Thread
 import zoneinfo
 from model.game import Game
 from model.obstacle import Obstacle
@@ -13,11 +11,10 @@ from model.action_order import ActionOrder
 from model.constants import Constants
 from typing import Optional
 from debug_interface import DebugInterface
-from debugging.color import Color
 from typing import List
 import random
-import copy
 from my_modules.game_math import *
+from debug_functions import *
 
 PROB_OF_DIRECTION_CHANGE = 0.007
 MAX_APPROACH_TO_ZONE = 4
@@ -319,10 +316,8 @@ class MyStrategy:
         self.actions(game)
         orders[self.my_units[0].id] = UnitOrder(self.move_direction, self.view_direction, self.action)
         if self.target_enemy != None:
-            debug_interface.add_placed_text(self.my_units[0].position, "{}\n{}".format(self.remembered_enemies, self.target_enemy.id), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
-        for enemy in self.remembered_enemies:
-            dist = calc_distance(self.my_units[0].position, enemy.position)
-            debug_interface.add_placed_text(enemy.position, "{}\n{:.1f}".format(enemy.id, dist), Vec2(0.5, 0.5), 1, Color(0, 0, 0, 255))
+            display_enemies_id(debug_interface, self.remembered_enemies)
+        display_distance_to_enemy(debug_interface, self.my_units[0], self.remembered_enemies)
         return Order(orders)
     def debug_update(self, displayed_tick: int, debug_interface: DebugInterface):
         pass
