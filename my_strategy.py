@@ -54,10 +54,29 @@ class MyStrategy:
     def shooting(self):
         predicted_position = self.predict_enemy_position(self.target_enemy)
         self.set_view_direction(predicted_position)
-        if calc_distance(self.target_enemy.position, self.my_units[0].position) < self.constants.weapons[self.my_units[0].weapon].projectile_speed * SHOOTING_DISTANCE_MULTIPLIER:
+        if calc_distance(self.target_enemy.position, self.my_units[0].position) < self.constants.weapons[self.my_units[0].weapon].projectile_speed * SHOOTING_DISTANCE_MULTIPLIER and not self.obstacle_on_the_way(self.target_enemy.position): # replace with closest obstacles
             self.action = ActionOrder.Aim(True)
         else:
             self.action = ActionOrder.Aim(False)
+
+    def obstacle_on_the_way(self, enemy_position):
+        vec_to_enemy = get_vec(self.my_units[0].position, enemy_position)
+        enemy_angle = calc_angle(vec_to_enemy)
+        distance_to_enemy = calc_distance(self.my_units[0].position, enemy_position)
+        for obstacle in self.constants.obstacles:
+            if not obstacle.can_shoot_through:
+                distance_to_obstacle = calc_distance(self.my_units[0].position, obstacle.position)
+                if distance_to_enemy > distance_to_obstacle:
+                    tangent_points = calc_tangent_points(obstacle.position, obstacle.radius, self.my_units[0].position)
+                    tangent_angle_0 = calc_angle(get_vec(self.my_units[0].position, tangent_points[0]))
+                    tangent_angle_1 = calc_angle(get_vec(self.my_units[0].position, tangent_points[1]))
+                    if abs(tangent_angle_0 - tangent_angle_1) < 180:
+                        if enemy_angle > tangent_angle_0 and enemy_angle < tangent_angle_1:
+                            return True
+                    else:
+                        if enemy_angle > tangent_angle_0 and enemy_angle > tangent_angle_1 or enemy_angle < tangent_angle_0 and enemy_angle < tangent_angle_1:
+                            return True
+        return False
 
     def calc_view_angle(self):
         return self.constants.field_of_view - (self.constants.field_of_view - self.constants.weapons[self.my_units[0].weapon].aim_field_of_view) * self.my_units[0].aim
@@ -324,4 +343,3 @@ class MyStrategy:
     def finish(self):
         pass
     
-    ":.1f"
