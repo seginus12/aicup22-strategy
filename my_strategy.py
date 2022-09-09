@@ -1,6 +1,4 @@
-from email.errors import ObsoleteHeaderDefect
 from ssl import VERIFY_CRL_CHECK_LEAF
-import zoneinfo
 from model.game import Game
 from model.obstacle import Obstacle
 from model.unit import Unit
@@ -37,7 +35,6 @@ class MyStrategy:
     passed_obstacles: List[Obstacle]
     action: ActionOrder
     constants: Constants
-    initial_direction: Vec2
     obstacle_passed: bool
 
     def set_view_direction(self, target_point: Vec2):
@@ -52,15 +49,15 @@ class MyStrategy:
         coef = calc_distance(self.my_units[0].position, enemy.position) / self.constants.weapons[self.my_units[0].weapon].projectile_speed
         return Vec2(enemy.position.x + enemy.velocity.x * coef, enemy.position.y + enemy.velocity.y * coef)
 
-    def shooting(self):
+    def shooting(self, obstacle_on_the_way: Obstacle):
         predicted_position = self.predict_enemy_position(self.target_enemy)
         self.set_view_direction(predicted_position)
-        if calc_distance(self.target_enemy.position, self.my_units[0].position) < self.constants.weapons[self.my_units[0].weapon].projectile_speed * SHOOTING_DISTANCE_MULTIPLIER and not self.obstacle_on_the_way(self.target_enemy.position):
+        if calc_distance(self.target_enemy.position, self.my_units[0].position) < self.constants.weapons[self.my_units[0].weapon].projectile_speed * SHOOTING_DISTANCE_MULTIPLIER and obstacle_on_the_way == None:
             self.action = ActionOrder.Aim(True)
         else:
             self.action = ActionOrder.Aim(False)
 
-    def obstacle_on_the_way(self, enemy_position):
+    def obstacle_on_the_way(self, enemy_position: Vec2):
         vec_to_enemy = get_vec(self.my_units[0].position, enemy_position)
         enemy_angle = calc_angle(vec_to_enemy)
         distance_to_enemy = calc_distance(self.my_units[0].position, enemy_position)
@@ -73,11 +70,11 @@ class MyStrategy:
                     tangent_angle_1 = calc_angle(get_vec(self.my_units[0].position, tangent_points[1]))
                     if abs(tangent_angle_0 - tangent_angle_1) < 180:
                         if enemy_angle > tangent_angle_0 and enemy_angle < tangent_angle_1:
-                            return True
+                            return obstacle
                     else:
                         if enemy_angle > tangent_angle_0 and enemy_angle > tangent_angle_1 or enemy_angle < tangent_angle_0 and enemy_angle < tangent_angle_1:
-                            return True
-        return False
+                            return obstacle
+        return None
 
     def calc_view_angle(self):
         return self.constants.field_of_view - (self.constants.field_of_view - self.constants.weapons[self.my_units[0].weapon].aim_field_of_view) * self.my_units[0].aim
@@ -205,17 +202,6 @@ class MyStrategy:
                 closest_obstacles.append(obstacle)
         self.closest_obstacles = closest_obstacles
 
-    def go_around_an_obstacle(self):
-        if self.obstacle_passed == True:
-            self.initial_direction.x = self.move_direction.x
-            self.initial_direction.y = self.move_direction.y
-            self.obstacle_passed = False
-        closest_obstacle = self.get_closest_obstacle(self.my_units[0].position)
-        self.maneuver(closest_obstacle.position)
-        if self.obstacle_passed == True:
-            self.move_direction.x = self.initial_direction.x
-            self.move_direction.y = self.initial_direction.y
-
     def maneuver(self, obstacle_position: Vec2):
         target_vec = to_ort(self.move_direction)
         target_angle = calc_angle(self.move_direction)
@@ -283,29 +269,36 @@ class MyStrategy:
         self.set_move_direction(self.target_obstacle.position, 1)
         self.set_view_direction(self.target_obstacle.position)
 
-    def keep_distance_to_enemy(self):
-        if calc_distance(self.target_enemy.position, self.my_units[0].position) > self.constants.weapons[self.my_units[0].weapon].projectile_speed:
-            self.set_move_direction(self.target_enemy.position, 1)
+    def keep_distance_to_enemy(self, obstacle_on_way: Obstacle):
+        if obstacle_on_way != None:
+            self.maneuver(obstacle_on_way.position)
         else:
-            self.set_move_direction(self.target_enemy.position, -self.constants.max_unit_backward_speed)
+            if calc_distance(self.target_enemy.position, self.my_units[0].position) > self.constants.weapons[self.my_units[0].weapon].projectile_speed:
+                self.set_move_direction(self.target_enemy.position, 1)
+            else:
+                self.set_move_direction(self.target_enemy.position, -self.constants.max_unit_backward_speed)
 
+    def fight(self):
+        obstacle_on_the_way = self.obstacle_on_the_way(self.target_enemy.position)
+        self.shooting(obstacle_on_the_way)
+        self.keep_distance_to_enemy(obstacle_on_the_way)
+    
     def actions(self, game: Game):
         self.action = None
         if game.zone.current_radius - calc_distance(self.my_units[0].position, game.zone.current_center) < self.constants.unit_radius * MAX_APPROACH_TO_ZONE:
             self.move_to_next_zone(game.zone.next_center)
-        elif self.obstacle_is_near():
-            self.go_around_an_obstacle()
         elif self.my_units[0].shield_potions > 0 and self.my_units[0].shield == 0:
             self.action = ActionOrder.UseShieldPotion()
         elif self.my_units[0].ammo[self.my_units[0].weapon] == 0:
             self.replenish_ammo(game, self.my_units[0].weapon)
-        elif self.enemies:
-            self.keep_distance_to_enemy()
-            self.shooting()
+        elif self.enemies and self.target_enemy:
+            self.fight()
         elif self.remembered_enemies:
             self.go_to_remebrered_enemies()
         elif self.my_units[0].shield_potions > 0 and self.my_units[0].shield < self.constants.max_shield:
             self.action = ActionOrder.UseShieldPotion()
+        elif self.obstacle_is_near():
+            self.maneuver(self.get_closest_obstacle(self.my_units[0].position).position)
         elif self.my_units[0].shield_potions == 0:
             self.replenish_shields(game)
         elif self.my_units[0].ammo[self.my_units[0].weapon] < self.constants.weapons[self.my_units[0].weapon].max_inventory_ammo and game.loot:
