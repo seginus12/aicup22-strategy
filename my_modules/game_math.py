@@ -1,5 +1,6 @@
 from model.vec2 import Vec2
 from math import *
+from typing import List
 
 def calc_distance(point1: Vec2, point2: Vec2):
         x_projection = point2.x - point1.x
@@ -49,3 +50,17 @@ def calc_tangent_points(center: Vec2, radius: float, point: Vec2):
         tangent_1 = Vec2(point.x + tangent_length * cos(tangent_angle_1), point.y + tangent_length * sin(tangent_angle_1))
         tangent_2 = Vec2(point.x + tangent_length * cos(tangent_angle_2), point.y + tangent_length * sin(tangent_angle_2))
         return [tangent_1, tangent_2]
+
+def sector_in_sector(out_sector: List[float], nested_sector: List[float]):
+        if  abs(out_sector[0] - nested_sector[0]) < 180 and abs(out_sector[1] - nested_sector[1]) < 180:
+                if out_sector[0] > nested_sector and out_sector[1] < nested_sector[1]:
+                        return True
+                return False
+        if  abs(out_sector[0] - nested_sector[0]) > 180 and abs(out_sector[1] - nested_sector[1]) < 180:
+                if out_sector[0] < nested_sector[0] and out_sector[1] < nested_sector[1]:
+                        return True
+                return False
+        if  abs(out_sector[0] - nested_sector[0]) < 180 and abs(out_sector[1] - nested_sector[1]) > 180:
+                if out_sector[0] > nested_sector[0] and out_sector[1] > nested_sector[1]:
+                        return True
+                return False
